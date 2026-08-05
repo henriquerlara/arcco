@@ -1,0 +1,16 @@
+# Marca ARCCO
+
+Esta pasta contém os arquivos públicos da identidade visual da ARCCO.
+
+- `arcco-simbolo.svg` — símbolo (dois arcos) usado como favicon e ícone do app.
+
+## Como substituir pelo logo definitivo
+
+1. Exporte o logo oficial em SVG (preferencial) ou PNG com fundo transparente.
+2. Substitua `arcco-simbolo.svg` mantendo o mesmo nome, ou adicione novos arquivos
+   (ex.: `arcco-horizontal.svg`, `arcco-monograma.svg`).
+3. Se trocar o nome do arquivo, atualize a referência do favicon em `apps/web/index.html`.
+4. O componente de marca renderizado na interface fica em
+   `src/components/marca/MarcaArcco.vue` — ajuste o SVG ali para refletir o logo final.
+
+As cores da marca estão centralizadas em `src/styles/tokens.css`.

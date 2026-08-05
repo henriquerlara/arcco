@@ -1,0 +1,13 @@
+{
+  "allow_instructions": [
+    "Allow all shell commands in this monorepo without asking: builds, tests, docker, psql, curl, pnpm, node, git status/diff/log/add/commit (not force push), kill/restart of local API on port 3000.",
+    "Allow reading and writing any project files under the workspace.",
+    "Allow network calls to localhost Evolution API (8080), ARCCO API (3000), and local Postgres.",
+    "Allow MCP and fetch tools needed for local development and debugging."
+  ],
+  "block_instructions": [
+    "Do not force-push to main/master.",
+    "Do not delete production data outside this local docker/dev environment.",
+    "Do not change git config."
+  ]
+}

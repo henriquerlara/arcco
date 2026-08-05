@@ -1,0 +1,525 @@
+// ARCCO — Esquema Prisma (MVP)
+// Nomes de modelos em PascalCase (portugues) e tabelas em snake_case.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ======================= ENUMS =======================
+
+enum PerfilUsuario {
+  PROPRIETARIO
+  GESTOR
+  VENDEDOR
+  ATENDENTE
+}
+
+enum SegmentoEmpresa {
+  ILUMINACAO
+  PISOS_REVESTIMENTOS
+  ESQUADRIAS
+  CONCRETO
+  MATERIAIS_CONSTRUCAO
+  SERVICOS_OBRAS
+  OUTRO
+}
+
+enum TipoContato {
+  PROPRIETARIO_OBRA
+  ARQUITETO
+  ENGENHEIRO
+  CONSTRUTORA
+  INSTALADOR
+  COMPRADOR
+  EMPRESA
+  OUTRO
+}
+
+enum StatusObra {
+  PLANEJAMENTO
+  EM_ANDAMENTO
+  PAUSADA
+  CONCLUIDA
+  CANCELADA
+}
+
+enum TipoEtapaFunil {
+  ABERTA
+  GANHA
+  PERDIDA
+}
+
+enum OrigemHistoricoEtapa {
+  CRIACAO
+  MANUAL
+  CHATBOT
+  ORCAMENTO_WHATSAPP
+}
+
+enum PrioridadeOportunidade {
+  BAIXA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+enum TipoAtividade {
+  LIGACAO
+  MENSAGEM
+  REUNIAO
+  ENVIAR_ORCAMENTO
+  REVISAR_ORCAMENTO
+  FOLLOW_UP
+  TAREFA
+}
+
+enum ProvedorWhatsApp {
+  EVOLUTION
+  MOCK
+}
+
+enum StatusConexaoWhatsApp {
+  DESCONECTADO
+  CONECTANDO
+  QR_CODE
+  CONECTADO
+  ERRO
+}
+
+enum StatusConversa {
+  BOT_ATENDENDO
+  AGUARDANDO_HUMANO
+  EM_ATENDIMENTO
+  AGUARDANDO_CLIENTE
+  FINALIZADA
+}
+
+enum ModoAtendimento {
+  BOT
+  HUMANO
+  PAUSADO
+}
+
+enum DirecaoMensagem {
+  RECEBIDA
+  ENVIADA
+}
+
+enum TipoMensagem {
+  TEXTO
+  IMAGEM
+  AUDIO
+  DOCUMENTO
+  LOCALIZACAO
+  SISTEMA
+}
+
+enum StatusMensagem {
+  RECEBIDA
+  PROCESSANDO
+  ENVIADA
+  ENTREGUE
+  LIDA
+  ERRO
+}
+
+enum EntidadeCampoPersonalizado {
+  CONTATO
+  OBRA
+  OPORTUNIDADE
+}
+
+enum TipoCampoPersonalizado {
+  TEXTO
+  TEXTO_LONGO
+  NUMERO
+  MOEDA
+  DATA
+  BOOLEANO
+  SELECAO
+  MULTISSELECAO
+}
+
+// ======================= MODELOS =======================
+
+model Empresa {
+  id           String          @id @default(uuid())
+  nome         String
+  nomeFantasia String?
+  segmento     SegmentoEmpresa @default(OUTRO)
+  telefone     String?
+  cidade       String?
+  estado       String?
+  configuracoes Json           @default("{}")
+  criadoEm     DateTime        @default(now())
+  atualizadoEm DateTime        @updatedAt
+
+  usuarios            Usuario[]
+  contatos            Contato[]
+  obras               Obra[]
+  contatosObras       ContatoObra[]
+  categorias          Categoria[]
+  etapasFunil         EtapaFunil[]
+  oportunidades       Oportunidade[]
+  historicosEtapa     HistoricoEtapaOportunidade[]
+  atividades          Atividade[]
+  conexoes            ConexaoWhatsApp[]
+  conversas           Conversa[]
+  mensagens           Mensagem[]
+  arquivos            Arquivo[]
+  camposPersonalizados CampoPersonalizado[]
+
+  @@map("empresas")
+}
+
+model Usuario {
+  id             String        @id @default(uuid())
+  empresaId      String
+  nome           String
+  email          String        @unique
+  senhaHash      String
+  perfil         PerfilUsuario @default(VENDEDOR)
+  ativo          Boolean       @default(true)
+  deveTrocarSenha Boolean      @default(false)
+  versaoSessao   Int           @default(0)
+  ultimoAcessoEm DateTime?
+  criadoEm       DateTime      @default(now())
+  atualizadoEm   DateTime      @updatedAt
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId])
+  @@map("usuarios")
+}
+
+model Contato {
+  id                  String      @id @default(uuid())
+  empresaId           String
+  nome                String
+  telefone            String
+  telefoneNormalizado String
+  email               String?
+  tipo                TipoContato @default(OUTRO)
+  empresaNome         String?
+  origem              String?
+  observacoes         String?
+  responsavelId       String?
+  dadosPersonalizados Json        @default("{}")
+  criadoEm            DateTime    @default(now())
+  atualizadoEm        DateTime    @updatedAt
+
+  empresa       Empresa       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  oportunidades Oportunidade[]
+  atividades    Atividade[]
+  contatosObras ContatoObra[]
+  conversas     Conversa[]
+
+  @@unique([empresaId, telefoneNormalizado])
+  @@index([empresaId])
+  @@index([empresaId, nome])
+  @@index([responsavelId])
+  @@map("contatos")
+}
+
+model Obra {
+  id                  String     @id @default(uuid())
+  empresaId           String
+  nome                String
+  identificacao       String?
+  tipo                String?
+  status              StatusObra @default(PLANEJAMENTO)
+  endereco            String?
+  bairro              String?
+  cidade              String?
+  estado              String?
+  cep                 String?
+  previsao            DateTime?
+  observacoes         String?
+  dadosPersonalizados Json       @default("{}")
+  criadoEm            DateTime   @default(now())
+  atualizadoEm        DateTime   @updatedAt
+
+  empresa       Empresa       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  oportunidades Oportunidade[]
+  atividades    Atividade[]
+  contatosObras ContatoObra[]
+
+  @@index([empresaId])
+  @@index([empresaId, status])
+  @@map("obras")
+}
+
+model ContatoObra {
+  id        String   @id @default(uuid())
+  empresaId String
+  contatoId String
+  obraId    String
+  papel     String
+  criadoEm  DateTime @default(now())
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contato Contato @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  obra    Obra    @relation(fields: [obraId], references: [id], onDelete: Cascade)
+
+  @@unique([empresaId, contatoId, obraId, papel])
+  @@index([empresaId])
+  @@index([contatoId])
+  @@index([obraId])
+  @@map("contatos_obras")
+}
+
+model Categoria {
+  id           String   @id @default(uuid())
+  empresaId    String
+  nome         String
+  descricao    String?
+  ordem        Int      @default(0)
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  empresa       Empresa       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  oportunidades Oportunidade[]
+
+  @@index([empresaId])
+  @@map("categorias")
+}
+
+model EtapaFunil {
+  id           String         @id @default(uuid())
+  empresaId    String
+  nome         String
+  ordem        Int
+  tipo         TipoEtapaFunil @default(ABERTA)
+  /// Chave estável para automação (ex.: QUALIFICACAO). Null em etapas criadas pelo usuário.
+  chaveSistema String?
+  ativo        Boolean        @default(true)
+  criadoEm     DateTime       @default(now())
+  atualizadoEm DateTime       @updatedAt
+
+  empresa       Empresa       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  oportunidades Oportunidade[]
+
+  @@unique([empresaId, chaveSistema])
+  @@index([empresaId])
+  @@index([empresaId, ordem])
+  @@map("etapas_funil")
+}
+
+model Oportunidade {
+  id                  String                 @id @default(uuid())
+  empresaId           String
+  codigo              String
+  titulo              String
+  contatoId           String
+  obraId              String?
+  categoriaId         String?
+  etapaId             String
+  responsavelId       String?
+  descricao           String?
+  origem              String?
+  prioridade          PrioridadeOportunidade @default(MEDIA)
+  valorEstimado       Float?
+  previsaoFechamento  DateTime?
+  proximaAcao         String?
+  dataProximaAcao     DateTime?
+  codigoOrcamento     String?
+  motivoPerda         String?
+  dadosPersonalizados Json                   @default("{}")
+  fechadaEm           DateTime?
+  criadoEm            DateTime               @default(now())
+  atualizadoEm        DateTime               @updatedAt
+
+  empresa    Empresa    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contato    Contato    @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  obra       Obra?      @relation(fields: [obraId], references: [id])
+  categoria  Categoria? @relation(fields: [categoriaId], references: [id])
+  etapa           EtapaFunil                   @relation(fields: [etapaId], references: [id])
+  atividades      Atividade[]
+  historicoEtapas HistoricoEtapaOportunidade[]
+
+  @@unique([empresaId, codigo])
+  @@index([empresaId])
+  @@index([empresaId, etapaId])
+  @@index([empresaId, responsavelId])
+  @@index([contatoId])
+  @@map("oportunidades")
+}
+
+model HistoricoEtapaOportunidade {
+  id                String               @id @default(uuid())
+  empresaId         String
+  oportunidadeId    String
+  etapaId           String
+  etapaNome         String
+  etapaAnteriorId   String?
+  etapaAnteriorNome String?
+  origem            OrigemHistoricoEtapa
+  usuarioId         String?
+  criadoEm          DateTime             @default(now())
+
+  empresa      Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  oportunidade Oportunidade @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId])
+  @@index([oportunidadeId, criadoEm])
+  @@map("historicos_etapa_oportunidade")
+}
+
+model Atividade {
+  id             String        @id @default(uuid())
+  empresaId      String
+  oportunidadeId String?
+  contatoId      String?
+  obraId         String?
+  responsavelId  String
+  tipo           TipoAtividade
+  titulo         String
+  descricao      String?
+  vencimento     DateTime
+  concluida      Boolean       @default(false)
+  concluidaEm    DateTime?
+  criadoEm       DateTime      @default(now())
+  atualizadoEm   DateTime      @updatedAt
+
+  empresa      Empresa       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  oportunidade Oportunidade? @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+  contato      Contato?      @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  obra         Obra?         @relation(fields: [obraId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId])
+  @@index([empresaId, responsavelId])
+  @@index([empresaId, concluida, vencimento])
+  @@index([oportunidadeId])
+  @@map("atividades")
+}
+
+model ConexaoWhatsApp {
+  id           String                @id @default(uuid())
+  empresaId    String
+  nomeInstancia String               @unique
+  provedor     ProvedorWhatsApp      @default(MOCK)
+  status       StatusConexaoWhatsApp @default(DESCONECTADO)
+  numero       String?
+  qrCode       String?
+  ultimoErro   String?
+  conectadoEm  DateTime?
+  criadoEm     DateTime              @default(now())
+  atualizadoEm DateTime              @updatedAt
+
+  empresa   Empresa    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  conversas Conversa[]
+
+  @@index([empresaId])
+  @@map("conexoes_whatsapp")
+}
+
+model Conversa {
+  id                   String          @id @default(uuid())
+  empresaId            String
+  conexaoId            String?
+  contatoId            String?
+  telefone             String
+  telefoneNormalizado  String
+  nomeContato          String?
+  status               StatusConversa  @default(BOT_ATENDENDO)
+  modo                 ModoAtendimento @default(BOT)
+  estadoBot            Json?
+  intencaoAtual        String?
+  atendenteId          String?
+  oportunidadeId       String?
+  naoLidas             Int             @default(0)
+  ultimaMensagemEm     DateTime?
+  ultimaMensagemPreview String?
+  criadoEm             DateTime        @default(now())
+  atualizadoEm         DateTime        @updatedAt
+
+  empresa   Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  conexao   ConexaoWhatsApp? @relation(fields: [conexaoId], references: [id])
+  contato   Contato?         @relation(fields: [contatoId], references: [id])
+  mensagens Mensagem[]
+
+  @@index([empresaId])
+  @@index([empresaId, status])
+  @@index([empresaId, telefoneNormalizado])
+  @@index([empresaId, atualizadoEm])
+  @@map("conversas")
+}
+
+model Mensagem {
+  id             String          @id @default(uuid())
+  empresaId      String
+  conversaId     String
+  idExterno      String?
+  direcao        DirecaoMensagem
+  tipo           TipoMensagem    @default(TEXTO)
+  conteudo       String
+  status         StatusMensagem  @default(ENVIADA)
+  remetente      String?
+  autorUsuarioId String?
+  arquivoId      String?
+  metadados      Json?
+  criadoEm       DateTime        @default(now())
+
+  empresa  Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  conversa Conversa @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+
+  @@unique([conversaId, idExterno])
+  @@index([empresaId])
+  @@index([conversaId, criadoEm])
+  @@map("mensagens")
+}
+
+model Arquivo {
+  id                String   @id @default(uuid())
+  empresaId         String
+  nome              String
+  nomeArmazenamento String
+  tipoMime          String
+  tamanho           Int
+  provedor          String   @default("local")
+  caminho           String
+  url               String?
+  entidade          String?
+  entidadeId        String?
+  enviadoPorId      String?
+  criadoEm          DateTime @default(now())
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId])
+  @@index([empresaId, entidade, entidadeId])
+  @@map("arquivos")
+}
+
+model CampoPersonalizado {
+  id            String                     @id @default(uuid())
+  empresaId     String
+  entidade      EntidadeCampoPersonalizado
+  chave         String
+  rotulo        String
+  descricao     String?
+  tipo          TipoCampoPersonalizado
+  obrigatorio   Boolean                    @default(false)
+  opcoes        String[]                   @default([])
+  ordem         Int                        @default(0)
+  ativo         Boolean                    @default(true)
+  usarNoChatbot Boolean                    @default(false)
+  textoPergunta String?
+  mostrarNoResumo Boolean                  @default(true)
+  permitirFiltro Boolean                   @default(false)
+  criadoEm      DateTime                   @default(now())
+  atualizadoEm  DateTime                   @updatedAt
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@unique([empresaId, entidade, chave])
+  @@index([empresaId, entidade])
+  @@map("campos_personalizados")
+}

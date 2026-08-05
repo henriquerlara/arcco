@@ -1,0 +1,94 @@
+@import './tokens.css';
+
+/* Fontes locais via @fontsource */
+@import '@fontsource/manrope/300.css';
+@import '@fontsource/manrope/400.css';
+@import '@fontsource/manrope/500.css';
+@import '@fontsource/manrope/600.css';
+@import '@fontsource/manrope/700.css';
+@import '@fontsource/cormorant-garamond/500.css';
+@import '@fontsource/cormorant-garamond/600.css';
+@import '@fontsource/cormorant-garamond/700.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    border-color: var(--arcco-borda);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--arcco-superficie);
+    color: var(--arcco-texto);
+    font-family: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.55;
+    min-height: 100vh;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(111, 106, 97, 0.25);
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(111, 106, 97, 0.4);
+    background-clip: content-box;
+  }
+}
+
+@layer components {
+  .fonte-marca {
+    font-family: 'Cormorant Garamond', ui-serif, Georgia, serif;
+  }
+
+  .foco-anel {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(199, 164, 84, 0.35);
+  }
+
+  /* Scrollbar clara sobre fundo escuro (sidebar) */
+  .scroll-escuro::-webkit-scrollbar-thumb {
+    background: rgba(228, 204, 139, 0.18);
+    background-clip: content-box;
+  }
+}
+
+/* Transições de rota */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
