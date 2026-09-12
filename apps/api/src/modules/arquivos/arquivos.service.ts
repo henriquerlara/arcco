@@ -20,7 +20,7 @@ export class ArquivosService {
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
   ) {}
 
-  async enviar(empresaId: string, usuarioId: string, entrada: EntradaUpload) {
+  async enviar(empresaId: string, usuarioId: string | null, entrada: EntradaUpload) {
     const extensao = path.extname(entrada.nome) || '';
     const nomeArmazenamento = `${empresaId}/${new Date().getFullYear()}/${randomUUID()}${extensao}`;
 

@@ -23,13 +23,13 @@ const ativo = computed({
 <template>
   <TabsRoot v-model="ativo" class="flex flex-col gap-4">
     <TabsList
-      class="inline-flex w-fit items-center gap-1 rounded-md border border-borda bg-marfim p-1"
+      class="inline-flex w-fit items-center gap-0 border-b border-borda"
     >
       <TabsTrigger
         v-for="item in itens"
         :key="item.valor"
         :value="item.valor"
-        class="rounded-sm px-3 py-1.5 text-sm font-medium text-texto-secundario transition-colors data-[state=active]:bg-branco data-[state=active]:text-texto data-[state=active]:shadow-suave focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        class="-mb-px border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-texto-secundario transition-colors data-[state=active]:border-carvao data-[state=active]:text-carvao focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-carvao/20"
       >
         {{ item.rotulo }}
       </TabsTrigger>

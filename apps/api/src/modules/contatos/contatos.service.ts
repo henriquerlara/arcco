@@ -27,9 +27,9 @@ export class ContatosService {
     const where: Prisma.ContatoWhereInput = { empresaId };
     if (query.busca) {
       where.OR = [
-        { nome: { contains: query.busca, mode: 'insensitive' } },
+        { nome: { contains: query.busca } },
         { telefoneNormalizado: { contains: normalizarTelefone(query.busca) } },
-        { empresaNome: { contains: query.busca, mode: 'insensitive' } },
+        { empresaNome: { contains: query.busca } },
       ];
     }
 

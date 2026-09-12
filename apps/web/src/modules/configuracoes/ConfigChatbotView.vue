@@ -32,6 +32,7 @@ const form = reactive({
   mensagemForaHorario: '',
   mensagemTransferencia: '',
   mensagemFinal: '',
+  textoPerguntaProjeto: 'a lista de materiais',
 });
 
 watch(
@@ -48,6 +49,12 @@ const campos = [
   { chave: 'mensagemForaHorario', rotulo: 'Fora do horário', ajuda: 'Enviada quando o atendimento humano está fechado.' },
   { chave: 'mensagemTransferencia', rotulo: 'Transferência para humano', ajuda: 'Enviada ao passar a conversa para a equipe.' },
   { chave: 'mensagemFinal', rotulo: 'Encerramento', ajuda: 'Enviada ao concluir o atendimento.' },
+  {
+    chave: 'textoPerguntaProjeto',
+    rotulo: 'Pergunta de materiais/projeto no orçamento',
+    ajuda:
+      'Trecho usado em: “você já possui …?”. Padrão: a lista de materiais. Ex.: o projeto luminotécnico ou a lista de materiais.',
+  },
 ] as const;
 
 async function salvar() {

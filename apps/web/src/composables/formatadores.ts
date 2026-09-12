@@ -15,6 +15,22 @@ export function formatarMoeda(valor: number | null | undefined): string {
   }).format(valor);
 }
 
+/** Interpreta "1.250,50", "1250.50" ou "1250" como reais. */
+export function parsearMoeda(valor: string | number | null | undefined): number | null {
+  if (typeof valor === 'number') {
+    return Number.isFinite(valor) && valor > 0 ? Math.round(valor * 100) / 100 : null;
+  }
+  if (!valor) return null;
+  const t = String(valor).trim().replace(/[R$\s]/gi, '');
+  if (!t) return null;
+  const normalizado = t.includes(',')
+    ? t.replace(/\./g, '').replace(',', '.')
+    : t;
+  const n = Number(normalizado);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.round(n * 100) / 100;
+}
+
 export function formatarNumero(valor: number | null | undefined): string {
   return new Intl.NumberFormat('pt-BR').format(valor ?? 0);
 }

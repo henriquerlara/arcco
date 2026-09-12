@@ -42,10 +42,10 @@ watch(
     <div class="flex min-w-0 flex-1 flex-col">
       <!-- Barra mobile -->
       <div
-        class="flex h-14 items-center gap-3 border-b border-borda bg-branco px-4 md:hidden"
+        class="flex h-16 items-center gap-3 border-b border-borda/80 bg-branco/95 px-4 backdrop-blur md:hidden"
       >
         <button
-          class="rounded-md p-2 text-texto-secundario hover:bg-marfim"
+          class="rounded-md border border-borda/80 p-2 text-carvao hover:bg-marfim"
           @click="interfaceStore.abrirSidebarMobile()"
         >
           <Menu class="size-5" />
@@ -55,11 +55,16 @@ watch(
 
       <main
         :class="[
-          'flex-1 overflow-y-auto',
-          semPadding ? 'p-0' : 'px-5 py-6 md:px-8 md:py-8',
+          'relative flex-1 overflow-y-auto',
+          semPadding ? 'p-0' : 'px-5 py-6 md:px-8 md:py-9 xl:px-10',
         ]"
       >
-        <div :class="semPadding ? 'h-full' : 'mx-auto w-full max-w-[1400px]'">
+        <div
+          v-if="!semPadding"
+          class="pointer-events-none absolute inset-x-0 top-0 h-56 bg-[radial-gradient(ellipse_at_top,rgba(184,170,151,0.12),transparent_65%)]"
+          aria-hidden="true"
+        />
+        <div :class="semPadding ? 'h-full' : 'relative mx-auto w-full max-w-[1440px]'">
           <RouterView v-slot="{ Component, route: rotaAtual }">
             <Transition name="fade" mode="out-in">
               <component :is="Component" :key="rotaAtual.fullPath" />

@@ -22,11 +22,19 @@ import { ChatbotModule } from './modules/chatbot/chatbot.module';
 import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
 import { ArquivosModule } from './modules/arquivos/arquivos.module';
 import { IaModule } from './modules/ia/ia.module';
+import { EventosModule } from './modules/eventos/eventos.module';
+import { ProdutosModule } from './modules/produtos/produtos.module';
+import { OrcamentosModule } from './modules/orcamentos/orcamentos.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      // Raiz do monorepo e cwd (apps/api) — permite .env único na raiz.
+      envFilePath: ['.env', '../../.env'],
+    }),
     PrismaModule,
+    EventosModule,
     IaModule,
     AutenticacaoModule,
     EmpresasModule,
@@ -44,6 +52,8 @@ import { IaModule } from './modules/ia/ia.module';
     ChatbotModule,
     WhatsAppModule,
     ArquivosModule,
+    ProdutosModule,
+    OrcamentosModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: FiltroExcecaoGlobal },

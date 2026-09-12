@@ -40,7 +40,7 @@ export class OpenAIProvider implements AIProvider {
         `Mensagem do cliente: "${texto}"`,
         `Voce classifica intencoes de atendimento de uma empresa do segmento ${
           contexto?.segmento ?? 'construcao'
-        }. Responda JSON {"intencao": "<uma das: NOVO_ORCAMENTO, NEGOCIAR_ORCAMENTO, AJUSTAR_ORCAMENTO, DUVIDA, ACOMPANHAR_SOLICITACAO, FINANCEIRO, ENTREGA, POS_VENDA, FALAR_COM_PESSOA, OUTRO>", "confianca": 0..1}.`,
+        }. Responda JSON {"intencao": "<uma das: VENDAS, NOVO_ORCAMENTO, NEGOCIAR_ORCAMENTO, AJUSTAR_ORCAMENTO, DUVIDA, ACOMPANHAR_SOLICITACAO, FINANCEIRO, ENTREGA, SAC, POS_VENDA, FALAR_COM_PESSOA, OUTRO>", "confianca": 0..1}.`,
       );
       const parsed = intencaoIaSchema.safeParse(bruto);
       if (parsed.success) return parsed.data;

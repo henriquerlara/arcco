@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { carregarEnv } from '../../config/env';
 import { EvolutionWhatsAppProvider } from './evolution.provider';
 import { WhatsAppService } from './whatsapp.service';
+import { extrairMidia, textoOuNomeArquivo } from './midia-evolution';
 
 type MsgEvo = {
   key?: {
@@ -89,8 +90,9 @@ export class EvolutionPollerService implements OnModuleInit, OnModuleDestroy {
         if (!id || msg.key?.fromMe) return false;
         if (this.processados.has(id)) return false;
         const telefone = telefoneDeMensagem(msg);
-        const texto = textoDeMensagem(msg.message);
-        return Boolean(telefone && texto);
+        const texto = textoOuNomeArquivo(msg.message);
+        const midia = extrairMidia(msg.message);
+        return Boolean(telefone && (texto || midia));
       })
       .sort((a, b) => epochMs(a.messageTimestamp) - epochMs(b.messageTimestamp));
 
@@ -103,7 +105,8 @@ export class EvolutionPollerService implements OnModuleInit, OnModuleDestroy {
       }
 
       const telefone = telefoneDeMensagem(msg);
-      const texto = textoDeMensagem(msg.message);
+      const texto = textoOuNomeArquivo(msg.message);
+      const midia = extrairMidia(msg.message);
       const remoteJid = msg.key?.remoteJid;
 
       this.logger.log(`Poller capturou msg ${id.slice(0, 8)}… de=${telefone.slice(0, 6)}***`);
@@ -113,9 +116,18 @@ export class EvolutionPollerService implements OnModuleInit, OnModuleDestroy {
           telefone,
           destinoEnvio: remoteJid?.endsWith('@lid') ? remoteJid : telefone,
           nome: msg.pushName,
-          texto,
+          texto: texto || midia?.nome || '',
           idExterno: id,
           recebidoEm: epochMs(msg.messageTimestamp),
+          midia: midia
+            ? {
+                tipo: midia.tipo,
+                nome: midia.nome,
+                mime: midia.mime,
+                caption: midia.caption,
+                itemEvo: msg as Record<string, unknown>,
+              }
+            : undefined,
         });
       } catch (erro) {
         this.logger.error(`Poller nao processou ${id}: ${(erro as Error).message}`);
@@ -143,10 +155,3 @@ function telefoneDeMensagem(msg: MsgEvo): string {
   return digitos;
 }
 
-function textoDeMensagem(message?: Record<string, unknown>): string {
-  if (!message) return '';
-  if (typeof message.conversation === 'string') return message.conversation.trim();
-  const ext = message.extendedTextMessage as { text?: string } | undefined;
-  if (ext?.text) return ext.text.trim();
-  return '';
-}

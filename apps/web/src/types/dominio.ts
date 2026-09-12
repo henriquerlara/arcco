@@ -42,8 +42,88 @@ export interface Empresa {
   telefone?: string | null;
   cidade?: string | null;
   estado?: string | null;
+  logoArquivoId?: string | null;
   onboardingConcluido?: boolean;
   configuracoes?: ConfiguracoesEmpresa;
+}
+
+export interface Produto {
+  id: string;
+  sku?: string | null;
+  nome: string;
+  descricao?: string | null;
+  unidade: string;
+  precoVenda: number;
+  estoqueAtual: number;
+  estoqueMinimo: number;
+  controlaEstoque: boolean;
+  ativo: boolean;
+  critico?: boolean;
+  zerado?: boolean;
+}
+
+export type TipoMovimentacaoEstoque = 'ENTRADA' | 'BAIXA' | 'AJUSTE';
+
+export interface MovimentacaoEstoque {
+  id: string;
+  produtoId: string;
+  tipo: TipoMovimentacaoEstoque;
+  quantidade: number;
+  saldoApos: number;
+  orcamentoId?: string | null;
+  oportunidadeId?: string | null;
+  observacao?: string | null;
+  usuarioId?: string | null;
+  criadoEm: string;
+}
+
+export interface ResumoEstoque {
+  totalComControle: number;
+  criticos: number;
+  zerados: number;
+}
+
+export type StatusOrcamento = 'RASCUNHO' | 'ENVIADO' | 'ACEITO' | 'CANCELADO' | 'CONVERTIDO';
+
+export interface ItemOrcamento {
+  id: string;
+  produtoId?: string | null;
+  nome: string;
+  unidade: string;
+  quantidade: number;
+  precoUnitario: number;
+  desconto: number;
+  totalLinha: number;
+  ordem: number;
+  produto?: Produto | null;
+}
+
+export interface AvisoEstoque {
+  produtoId: string;
+  nome: string;
+  solicitado: number;
+  disponivel: number;
+}
+
+export interface Orcamento {
+  id: string;
+  oportunidadeId: string;
+  numero: string;
+  versao: number;
+  status: StatusOrcamento;
+  vigente: boolean;
+  observacoes?: string | null;
+  descontoValor: number;
+  subtotal: number;
+  total: number;
+  validadeEm?: string | null;
+  arquivoId?: string | null;
+  enviadoEm?: string | null;
+  aceitoEm?: string | null;
+  convertidoEm?: string | null;
+  itens: ItemOrcamento[];
+  avisosEstoque?: AvisoEstoque[];
+  criadoEm: string;
 }
 
 export interface Sessao {
@@ -108,12 +188,14 @@ export interface EtapaFunil {
   ordem: number;
   tipo: TipoEtapaFunil;
   ativo: boolean;
+  chaveSistema?: string | null;
   totalOportunidades?: number;
   valorTotal?: number;
 }
 
 export interface Oportunidade {
   id: string;
+  codigo: string;
   titulo: string;
   contatoId: string;
   contato?: Contato | null;
@@ -137,8 +219,21 @@ export interface Oportunidade {
   dadosPersonalizados?: Record<string, unknown>;
   atividades?: Atividade[];
   historicoEtapas?: HistoricoEtapaOportunidade[];
+  eventos?: EventoOportunidade[];
+  orcamentos?: Orcamento[];
   criadoEm?: string;
   atualizadoEm?: string;
+}
+
+export interface EventoOportunidade {
+  id: string;
+  tipo: string;
+  titulo: string;
+  descricao?: string | null;
+  origem: string;
+  dados?: Record<string, unknown>;
+  usuarioId?: string | null;
+  criadoEm: string;
 }
 
 export type OrigemHistoricoEtapa =
@@ -209,6 +304,9 @@ export interface Conversa {
   responsavel?: Usuario | null;
   intencao?: IntencaoChatbot | null;
   oportunidadeId?: string | null;
+  oportunidade?: Oportunidade | null;
+  estadoBot?: { resumo?: string; dadosColetados?: Record<string, unknown> } | null;
+  ultimaMensagemPreview?: string | null;
   criadoEm?: string;
 }
 
@@ -219,6 +317,7 @@ export interface Mensagem {
   tipo: TipoMensagem;
   conteudo: string;
   status: StatusMensagem;
+  arquivoId?: string | null;
   autorNome?: string | null;
   deBot?: boolean;
   criadoEm: string;
@@ -251,10 +350,13 @@ export interface MetricasDashboard {
     valorGanhoNoPeriodo: number;
     perdidasNoPeriodo: number;
     taxaConversao: number;
+    ticketMedioGanho?: number;
+    paradas?: number;
   };
   contatos: { novosNoPeriodo: number };
   atividades: { pendentes: number; atrasadas: number };
   conversas: { aguardandoHumano: number; emAtendimento: number; botAtendendo: number };
+  estoque?: { comControle: number; criticos: number; zerados: number };
   funil: MetricasFunilPonto[];
 }
 
@@ -262,11 +364,12 @@ export interface PontoFunil {
   etapa: string;
   total: number;
   valor: number;
+  tipo?: TipoEtapaFunil;
 }
 
 export interface AlertaDashboard {
   id: string;
-  tipo: 'atividade_atrasada' | 'conversa_aguardando' | 'oportunidade_parada' | 'info';
+  tipo: 'atividade_atrasada' | 'conversa_aguardando' | 'oportunidade_parada' | 'estoque_critico' | 'info';
   titulo: string;
   descricao: string;
   link?: string | null;

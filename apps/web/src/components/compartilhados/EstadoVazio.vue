@@ -11,9 +11,9 @@ defineProps<{
 
 <template>
   <div
-    class="flex flex-col items-center justify-center rounded-lg border border-dashed border-borda bg-branco/50 px-6 py-14 text-center"
+    class="flex flex-col items-center justify-center rounded-md border border-dashed border-borda bg-branco/60 px-6 py-14 text-center"
   >
-    <div class="mb-4 flex size-14 items-center justify-center rounded-full bg-marfim text-dourado-hover">
+    <div class="mb-4 flex size-14 items-center justify-center rounded-t-full border border-borda bg-marfim text-carvao">
       <component :is="icone ?? Inbox" class="size-7" />
     </div>
     <h3 class="text-base font-semibold text-texto">{{ titulo }}</h3>

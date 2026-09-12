@@ -20,6 +20,14 @@ const enviarMensagemSchema = z.object({
   texto: z.string().min(1, 'Informe a mensagem'),
 });
 
+const enviarOrcamentoSchema = z.object({
+  texto: z.string().min(1, 'Informe a mensagem'),
+  valorEstimado: z.coerce
+    .number({ invalid_type_error: 'Informe o valor do orçamento' })
+    .positive('Informe um valor maior que zero'),
+  arquivoId: z.string().uuid().optional(),
+});
+
 const simularSchema = z.object({
   nomeInstancia: z.string().optional(),
   telefone: z.string().min(8),
@@ -71,6 +79,17 @@ export class WhatsAppController {
     @Body(new ZodValidationPipe(enviarMensagemSchema)) dto: z.infer<typeof enviarMensagemSchema>,
   ) {
     return this.servico.enviarMensagemAtendente(empresaId, conversaId, dto.texto, usuario.id);
+  }
+
+  /** Envia orçamento WhatsApp, grava o valor e avança para Negociação. */
+  @Post('oportunidades/:oportunidadeId/enviar-orcamento')
+  enviarOrcamento(
+    @EmpresaAtual() empresaId: string,
+    @Param('oportunidadeId') oportunidadeId: string,
+    @UsuarioAtual() usuario: UsuarioAutenticado,
+    @Body(new ZodValidationPipe(enviarOrcamentoSchema)) dto: z.infer<typeof enviarOrcamentoSchema>,
+  ) {
+    return this.servico.enviarOrcamento(empresaId, oportunidadeId, dto, usuario.id);
   }
 
   /** Simula uma mensagem recebida (apenas provedor mock) para testar o chatbot. */

@@ -63,7 +63,7 @@ watch(
     form.descricao = a?.descricao ?? '';
     form.vencimento = a?.vencimento ? a.vencimento.slice(0, 16) : '';
     form.responsavelId = a?.responsavelId ?? null;
-    form.contatoId = props.contatoId ?? a?.contatoId ?? null;
+    form.contatoId = props.contatoId ?? a?.contatoId ?? a?.oportunidade?.contato?.id ?? null;
     Object.keys(erros).forEach((k) => delete erros[k]);
   },
 );

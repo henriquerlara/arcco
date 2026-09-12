@@ -7,3 +7,5 @@ export * from './atividades';
 export * from './dashboard';
 export * from './conversas';
 export * from './configuracoes';
+export * from './arquivos';
+export * from './produtos-orcamentos';

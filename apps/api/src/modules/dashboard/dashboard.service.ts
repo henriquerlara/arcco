@@ -37,6 +37,8 @@ export class DashboardService {
       atividadesPendentes,
       atividadesAtrasadas,
       conversasPorStatus,
+      oportunidadesParadas,
+      produtosEstoque,
     ] = await this.prisma.$transaction([
       this.prisma.etapaFunil.findMany({ where: { empresaId, ativo: true }, orderBy: { ordem: 'asc' } }),
       this.prisma.oportunidade.count({ where: { empresaId, fechadaEm: null } }),
@@ -64,11 +66,27 @@ export class DashboardService {
         _count: true,
         orderBy: { status: 'asc' },
       }),
+      this.prisma.oportunidade.count({
+        where: {
+          empresaId,
+          fechadaEm: null,
+          atualizadoEm: { lt: new Date(Date.now() - 7 * 86400_000) },
+        },
+      }),
+      this.prisma.produto.findMany({
+        where: { empresaId, ativo: true, controlaEstoque: true },
+        select: { estoqueAtual: true, estoqueMinimo: true },
+      }),
     ]);
+
+    const estoqueCriticos = produtosEstoque.filter(
+      (p) => p.estoqueAtual <= p.estoqueMinimo,
+    ).length;
+    const estoqueZerados = produtosEstoque.filter((p) => p.estoqueAtual <= 0).length;
 
     const oportunidadesPorEtapa = await this.prisma.oportunidade.groupBy({
       by: ['etapaId'],
-      where: { empresaId, fechadaEm: null },
+      where: { empresaId },
       _count: true,
       _sum: { valorEstimado: true },
     });
@@ -107,10 +125,17 @@ export class DashboardService {
         valorGanhoNoPeriodo: ganhasPeriodo._sum.valorEstimado ?? 0,
         perdidasNoPeriodo: perdidasPeriodo,
         taxaConversao,
+        ticketMedioGanho: ganhas > 0 ? (ganhasPeriodo._sum.valorEstimado ?? 0) / ganhas : 0,
+        paradas: oportunidadesParadas,
       },
       contatos: { novosNoPeriodo: novosContatos },
       atividades: { pendentes: atividadesPendentes, atrasadas: atividadesAtrasadas },
       conversas,
+      estoque: {
+        comControle: produtosEstoque.length,
+        criticos: estoqueCriticos,
+        zerados: estoqueZerados,
+      },
       funil,
     };
   }

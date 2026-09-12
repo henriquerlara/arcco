@@ -42,16 +42,48 @@ Variáveis de ambiente relevantes (ver `apps/api/src/config/env.ts`):
 
 ```env
 WHATSAPP_PROVIDER=evolution
-EVOLUTION_API_URL=https://sua-evolution.exemplo.com
-EVOLUTION_API_KEY=sua-api-key
-EVOLUTION_WEBHOOK_SECRET=um-segredo-forte
-API_PUBLIC_URL=https://sua-api.exemplo.com
+EVOLUTION_API_URL=http://127.0.0.1:8080
+EVOLUTION_API_KEY=arcco-evolution-dev-key-change-me
+EVOLUTION_WEBHOOK_SECRET=arcco-webhook-secret-dev-change-me
+API_PUBLIC_URL=http://host.docker.internal:3000
 ```
 
 - `EVOLUTION_API_URL` — URL base da Evolution (sem barra final; a barra é normalizada).
-- `EVOLUTION_API_KEY` — enviada no header `apikey` em toda chamada.
+- `EVOLUTION_API_KEY` — enviada no header `apikey` em toda chamada (deve bater com `AUTHENTICATION_API_KEY` da Evolution).
 - `EVOLUTION_WEBHOOK_SECRET` — validado no header `x-webhook-secret` do webhook de entrada.
-- `API_PUBLIC_URL` — URL pública da API, usada para montar o endereço do webhook na Evolution.
+- `API_PUBLIC_URL` — URL pública da API, usada para montar o endereço do webhook na Evolution. Com Evolution no Docker e API no host, use `http://host.docker.internal:3000`.
+
+### Subir a stack opcional da Evolution (Docker)
+
+Na raiz do repositório:
+
+```bash
+docker compose up -d
+```
+
+Sobe:
+
+| Serviço | Porta | Uso |
+| --- | --- | --- |
+| `postgres` | `5434` | Banco do ARCCO |
+| `evolution-api` | `8080` | Evolution API |
+| `evolution-postgres` / `evolution-redis` | interno | Persistência da Evolution |
+
+Depois:
+
+```bash
+pnpm db:generate
+pnpm db:migrate   # ou db:push
+pnpm db:seed
+pnpm dev:api
+pnpm dev:web
+```
+
+No painel: **Configurações → WhatsApp** → criar conexão → conectar → escanear QR. Ao conectar, a API cria a instância na Evolution e configura o webhook automaticamente para `{API_PUBLIC_URL}/api/webhooks/evolution`.
+
+Logs da Evolution: `pnpm docker:logs` (ou `docker compose logs -f evolution-api`).
+
+Para voltar ao simulador sem WhatsApp real: `WHATSAPP_PROVIDER=mock` no `.env`.
 
 ---
 

@@ -22,6 +22,19 @@ export interface OpcoesEnvioTexto {
   };
 }
 
+export interface MidiaBaixada {
+  buffer: Buffer;
+  mime: string;
+  nome: string;
+}
+
+export interface MidiaParaEnvio {
+  buffer: Buffer;
+  mime: string;
+  nome: string;
+  caption?: string;
+}
+
 export interface WhatsAppProvider {
   readonly nome: string;
   enviarTexto(
@@ -30,7 +43,17 @@ export interface WhatsAppProvider {
     texto: string,
     opcoes?: OpcoesEnvioTexto,
   ): Promise<EnvioResultado>;
+  enviarMidia(
+    nomeInstancia: string,
+    telefone: string,
+    midia: MidiaParaEnvio,
+  ): Promise<EnvioResultado>;
   conectar(nomeInstancia: string): Promise<ResultadoConexao>;
   desconectar(nomeInstancia: string): Promise<void>;
   statusConexao(nomeInstancia: string): Promise<ResultadoConexao>;
+  /** Baixa PDF/imagem/áudio do item Evolution. Ausente no mock. */
+  baixarMidia?(
+    nomeInstancia: string,
+    itemEvo: Record<string, unknown>,
+  ): Promise<MidiaBaixada | null>;
 }

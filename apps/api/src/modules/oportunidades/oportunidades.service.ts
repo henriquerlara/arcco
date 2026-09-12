@@ -3,6 +3,8 @@ import {
   criarRespostaPaginada,
   EntidadeCampoPersonalizado,
   OrigemHistoricoEtapa,
+  StatusOrcamento,
+  TipoAtividade,
   TipoEtapaFunil,
   type criarOportunidadeSchema,
   type moverOportunidadeSchema,
@@ -14,6 +16,9 @@ import { PrismaService } from '../../database/prisma.service';
 import { Erros } from '../../common/erros/erros';
 import { avaliarTransicaoEtapa } from '../../common/utils/funil';
 import { CamposPersonalizadosService } from '../campos-personalizados/campos-personalizados.service';
+import { EventosService, TipoEvento } from '../eventos/eventos.service';
+import { ProdutosService } from '../produtos/produtos.service';
+import { lerAjustes, persistirAjustes } from '../../common/utils/ajustes-persistir';
 
 type CriarOportunidadeInput = z.infer<typeof criarOportunidadeSchema>;
 type AtualizarOportunidadeInput = Partial<CriarOportunidadeInput> & { motivoPerda?: string | null };
@@ -46,6 +51,18 @@ const INCLUDE_PADRAO = {
 const INCLUDE_DETALHE = {
   ...INCLUDE_PADRAO,
   historicoEtapas: { orderBy: { criadoEm: 'asc' as const } },
+  eventos: { orderBy: { criadoEm: 'desc' as const } },
+  atividades: {
+    where: { concluida: false },
+    orderBy: { vencimento: 'asc' as const },
+    take: 5,
+  },
+  orcamentos: {
+    include: {
+      itens: { orderBy: { ordem: 'asc' as const } },
+    },
+    orderBy: { versao: 'desc' as const },
+  },
 } satisfies Prisma.OportunidadeInclude;
 
 @Injectable()
@@ -53,6 +70,8 @@ export class OportunidadesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly campos: CamposPersonalizadosService,
+    private readonly eventos: EventosService,
+    private readonly produtos: ProdutosService,
   ) {}
 
   async listar(empresaId: string, query: PaginacaoQuery) {
@@ -62,9 +81,9 @@ export class OportunidadesService {
     if (query.categoriaId) where.categoriaId = query.categoriaId;
     if (query.busca) {
       where.OR = [
-        { titulo: { contains: query.busca, mode: 'insensitive' } },
-        { codigo: { contains: query.busca, mode: 'insensitive' } },
-        { contato: { nome: { contains: query.busca, mode: 'insensitive' } } },
+        { titulo: { contains: query.busca } },
+        { codigo: { contains: query.busca } },
+        { contato: { nome: { contains: query.busca } } },
       ];
     }
 
@@ -82,12 +101,12 @@ export class OportunidadesService {
     return criarRespostaPaginada(dados, total, query.pagina, query.porPagina);
   }
 
-  /** Agrupa oportunidades por etapa para exibicao em kanban. */
+  /** Agrupa oportunidades por etapa para exibicao em kanban (inclui Fechado/Perdido). */
   async kanban(empresaId: string) {
     const [etapas, oportunidades] = await this.prisma.$transaction([
       this.prisma.etapaFunil.findMany({ where: { empresaId, ativo: true }, orderBy: { ordem: 'asc' } }),
       this.prisma.oportunidade.findMany({
-        where: { empresaId, fechadaEm: null },
+        where: { empresaId },
         include: INCLUDE_PADRAO,
         orderBy: { atualizadoEm: 'desc' },
       }),
@@ -120,6 +139,36 @@ export class OportunidadesService {
           criadoEm: oportunidade.criadoEm,
         },
       });
+      await this.eventos.registrar(this.prisma, {
+        empresaId,
+        oportunidadeId: id,
+        tipo: TipoEvento.OPORTUNIDADE_CRIADA,
+        titulo: 'Oportunidade criada',
+        descricao: `Entrada em ${oportunidade.etapa.nome}`,
+        origem: OrigemHistoricoEtapa.CRIACAO,
+        criadoEm: oportunidade.criadoEm,
+      });
+      return this.prisma.oportunidade.findFirstOrThrow({
+        where: { id, empresaId },
+        include: INCLUDE_DETALHE,
+      });
+    }
+
+    if (oportunidade.eventos.length === 0) {
+      await this.prisma.eventoOportunidade.createMany({
+        data: oportunidade.historicoEtapas.map((item, indice) => ({
+          empresaId,
+          oportunidadeId: id,
+          tipo: indice === 0 ? TipoEvento.OPORTUNIDADE_CRIADA : TipoEvento.ETAPA_ALTERADA,
+          titulo: item.etapaAnteriorNome
+            ? `${item.etapaAnteriorNome} → ${item.etapaNome}`
+            : 'Oportunidade criada',
+          descricao: item.etapaAnteriorNome ? `Entrada em ${item.etapaNome}` : `Entrada em ${item.etapaNome}`,
+          origem: item.origem,
+          usuarioId: item.usuarioId,
+          criadoEm: item.criadoEm,
+        })),
+      });
       return this.prisma.oportunidade.findFirstOrThrow({
         where: { id, empresaId },
         include: INCLUDE_DETALHE,
@@ -130,8 +179,13 @@ export class OportunidadesService {
   }
 
   private async proximoCodigo(empresaId: string): Promise<string> {
-    const total = await this.prisma.oportunidade.count({ where: { empresaId } });
-    return `OP-${String(total + 1).padStart(4, '0')}`;
+    const ultima = await this.prisma.oportunidade.findFirst({
+      where: { empresaId },
+      select: { codigo: true },
+      orderBy: { codigo: 'desc' },
+    });
+    const sequencia = Number(ultima?.codigo.match(/(\d+)$/)?.[1] ?? 0) + 1;
+    return `OP-${String(sequencia).padStart(4, '0')}`;
   }
 
   private async resolverEtapa(
@@ -170,6 +224,8 @@ export class OportunidadesService {
 
     const etapa = await this.resolverEtapa(empresaId, dto.etapaId, opcoes.chaveSistemaEtapa);
     const codigo = await this.proximoCodigo(empresaId);
+    // Identidade do negócio = número do pedido (sem nome descritivo).
+    const titulo = codigo;
     const dadosPersonalizados = await this.campos.validarPara(
       empresaId,
       EntidadeCampoPersonalizado.OPORTUNIDADE,
@@ -183,7 +239,7 @@ export class OportunidadesService {
         data: {
           empresaId,
           codigo,
-          titulo: dto.titulo,
+          titulo,
           contatoId: dto.contatoId,
           obraId: dto.obraId ?? null,
           categoriaId: dto.categoriaId ?? null,
@@ -213,15 +269,26 @@ export class OportunidadesService {
         },
       });
 
+      await this.eventos.registrar(tx, {
+        empresaId,
+        oportunidadeId: criada.id,
+        tipo: TipoEvento.OPORTUNIDADE_CRIADA,
+        titulo: 'Oportunidade criada',
+        descricao: `Entrada em ${etapa.nome}`,
+        origem: origemHistorico,
+        usuarioId: opcoes.usuarioId,
+      });
+
       return criada;
     });
   }
 
   async atualizar(empresaId: string, id: string, dto: AtualizarOportunidadeInput) {
-    await this.obter(empresaId, id);
+    const atual = await this.obter(empresaId, id);
 
     const data: Prisma.OportunidadeUpdateInput = {
-      titulo: dto.titulo,
+      // Título do negócio é sempre o número do pedido.
+      titulo: dto.titulo === undefined ? undefined : atual.codigo,
       descricao: dto.descricao,
       origem: dto.origem,
       prioridade: dto.prioridade,
@@ -259,6 +326,105 @@ export class OportunidadesService {
     }
 
     return this.prisma.oportunidade.update({ where: { id }, data, include: INCLUDE_PADRAO });
+  }
+
+  /** Marca um ajuste (ou todos, se sem id) como feito. */
+  async marcarAjusteCorrigido(
+    empresaId: string,
+    id: string,
+    usuarioId?: string,
+    ajusteId?: string,
+  ) {
+    const atual = await this.prisma.oportunidade.findFirst({ where: { id, empresaId } });
+    if (!atual) {
+      throw Erros.naoEncontrado('OPORTUNIDADE_NAO_ENCONTRADA', 'Oportunidade nao encontrada');
+    }
+
+    const atuais = { ...((atual.dadosPersonalizados ?? {}) as Record<string, unknown>) };
+    const ajustes = lerAjustes(atuais, atual.descricao);
+    const marcados: typeof ajustes = [];
+
+    if (ajusteId) {
+      const indiceLegado = ajusteId.startsWith('legado-') ? Number(ajusteId.slice(7)) : Number.NaN;
+      const item =
+        ajustes.find((ajuste) => ajuste.id === ajusteId) ??
+        (Number.isInteger(indiceLegado) ? ajustes[indiceLegado] : undefined);
+      if (!item) {
+        throw Erros.naoEncontrado('AJUSTE_NAO_ENCONTRADO', 'Pedido de ajuste nao encontrado');
+      }
+      item.status = 'corrigido';
+      marcados.push(item);
+    } else {
+      for (const item of ajustes) {
+        if (item.status !== 'corrigido') marcados.push(item);
+        item.status = 'corrigido';
+      }
+    }
+
+    const dados = persistirAjustes(atuais, ajustes);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.oportunidade.update({
+        where: { id },
+        data: { dadosPersonalizados: dados as object },
+      });
+
+      if (!ajusteId) {
+        await tx.atividade.updateMany({
+          where: {
+            empresaId,
+            oportunidadeId: id,
+            tipo: TipoAtividade.REVISAR_ORCAMENTO,
+            concluida: false,
+          },
+          data: { concluida: true, concluidaEm: new Date() },
+        });
+      } else {
+        for (const item of marcados) {
+          const porTexto = await tx.atividade.updateMany({
+            where: {
+              empresaId,
+              oportunidadeId: id,
+              tipo: TipoAtividade.REVISAR_ORCAMENTO,
+              concluida: false,
+              descricao: item.texto,
+            },
+            data: { concluida: true, concluidaEm: new Date() },
+          });
+          if (porTexto.count > 0) continue;
+          const tarefa = await tx.atividade.findFirst({
+            where: {
+              empresaId,
+              oportunidadeId: id,
+              tipo: TipoAtividade.REVISAR_ORCAMENTO,
+              concluida: false,
+            },
+            orderBy: { criadoEm: 'asc' },
+          });
+          if (tarefa) {
+            await tx.atividade.update({
+              where: { id: tarefa.id },
+              data: { concluida: true, concluidaEm: new Date() },
+            });
+          }
+        }
+      }
+    });
+
+    await this.eventos.registrar(this.prisma, {
+      empresaId,
+      oportunidadeId: id,
+      tipo: TipoEvento.AJUSTE_CORRIGIDO,
+      titulo: marcados.length > 1 ? 'Ajustes de orçamento corrigidos' : 'Ajuste de orçamento corrigido',
+      descricao:
+        marcados.length === 1
+          ? marcados[0]!.texto
+          : 'O time marcou os pedidos de ajuste como feitos.',
+      origem: OrigemHistoricoEtapa.MANUAL,
+      usuarioId,
+    });
+    await this.eventos.sincronizarProximaAcao(empresaId, id);
+    return this.obter(empresaId, id);
   }
 
   async mover(
@@ -316,6 +482,68 @@ export class OportunidadesService {
           usuarioId: opcoes.usuarioId ?? null,
         },
       });
+
+      await this.eventos.registrar(tx, {
+        empresaId,
+        oportunidadeId: id,
+        tipo: TipoEvento.ETAPA_ALTERADA,
+        titulo: `${atual.etapa.nome} → ${destino.nome}`,
+        descricao:
+          origem === OrigemHistoricoEtapa.MANUAL
+            ? 'Etapa corrigida manualmente'
+            : 'Progresso atualizado automaticamente',
+        origem,
+        usuarioId: opcoes.usuarioId,
+        dados: { etapaAnteriorId: atual.etapaId, etapaId: destino.id },
+      });
+
+      if (destino.tipo === TipoEtapaFunil.GANHA) {
+        const vigente = await tx.orcamento.findFirst({
+          where: {
+            empresaId,
+            oportunidadeId: id,
+            vigente: true,
+            status: { in: [StatusOrcamento.ENVIADO, StatusOrcamento.ACEITO] },
+          },
+        });
+        if (vigente) {
+          await this.produtos.baixarPorOrcamento(
+            tx,
+            empresaId,
+            vigente.id,
+            id,
+            opcoes.usuarioId,
+          );
+          await tx.orcamento.update({
+            where: { id: vigente.id },
+            data: { status: StatusOrcamento.CONVERTIDO, convertidoEm: new Date() },
+          });
+          await this.eventos.registrar(tx, {
+            empresaId,
+            oportunidadeId: id,
+            tipo: TipoEvento.ESTOQUE_BAIXADO,
+            titulo: 'Estoque baixado pelo orçamento vigente',
+            descricao: `Baixa automática do orçamento ${vigente.numero}.`,
+            origem,
+            usuarioId: opcoes.usuarioId,
+            dados: { orcamentoId: vigente.id },
+          });
+        }
+      }
+
+      if (destino.tipo === TipoEtapaFunil.PERDIDA) {
+        await tx.orcamento.updateMany({
+          where: {
+            empresaId,
+            oportunidadeId: id,
+            vigente: true,
+            status: {
+              in: [StatusOrcamento.ENVIADO, StatusOrcamento.ACEITO, StatusOrcamento.RASCUNHO],
+            },
+          },
+          data: { status: StatusOrcamento.CANCELADO, vigente: false },
+        });
+      }
 
       return tx.oportunidade.findFirstOrThrow({
         where: { id, empresaId },

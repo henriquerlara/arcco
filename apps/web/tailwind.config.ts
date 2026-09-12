@@ -72,17 +72,16 @@ const config: Config = {
       },
       fontFamily: {
         sans: ['Manrope', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        serif: ['"Cormorant Garamond"', 'ui-serif', 'Georgia', 'serif'],
+        serif: ['Manrope', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       borderRadius: {
-        lg: '12px',
-        md: '10px',
-        sm: '8px',
+        lg: '8px',
+        md: '6px',
+        sm: '4px',
       },
       boxShadow: {
-        suave: '0 1px 2px rgba(10, 10, 9, 0.04), 0 1px 3px rgba(10, 10, 9, 0.06)',
-        cartao: '0 1px 2px rgba(10, 10, 9, 0.04), 0 4px 12px rgba(10, 10, 9, 0.05)',
-        flutuante: '0 8px 30px rgba(10, 10, 9, 0.12)',
+        /* Só overlays flutuantes (dialog, menu, popover) */
+        flutuante: 'var(--arcco-sombra-overlay)',
       },
       keyframes: {
         'accordion-down': {

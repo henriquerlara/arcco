@@ -5,9 +5,6 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().default(3000),
   FRONTEND_URL: z.string().default('http://localhost:5173'),
 
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL e obrigatoria'),
-  DIRECT_URL: z.string().optional(),
-
   JWT_ACCESS_SECRET: z.string().min(16, 'JWT_ACCESS_SECRET muito curto'),
   JWT_REFRESH_SECRET: z.string().min(16, 'JWT_REFRESH_SECRET muito curto'),
   JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),

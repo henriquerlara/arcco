@@ -9,8 +9,8 @@ const props = defineProps<{
 
 const classes = computed(() =>
   cn(
-    'rounded-lg border border-borda bg-card text-card-foreground shadow-cartao',
-    props.interativo && 'transition-shadow hover:shadow-flutuante cursor-pointer',
+    'superficie-arquitetonica rounded-md text-card-foreground',
+    props.interativo && 'superficie-interativa',
     props.class,
   ),
 );

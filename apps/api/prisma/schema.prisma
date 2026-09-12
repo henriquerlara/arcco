@@ -6,9 +6,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "sqlite"
+  url      = "file:./arcco.db"
 }
 
 // ======================= ENUMS =======================
@@ -146,34 +145,53 @@ enum TipoCampoPersonalizado {
   MULTISSELECAO
 }
 
+enum StatusOrcamento {
+  RASCUNHO
+  ENVIADO
+  ACEITO
+  CANCELADO
+  CONVERTIDO
+}
+
+enum TipoMovimentacaoEstoque {
+  ENTRADA
+  BAIXA
+  AJUSTE
+}
+
 // ======================= MODELOS =======================
 
 model Empresa {
-  id           String          @id @default(uuid())
-  nome         String
-  nomeFantasia String?
-  segmento     SegmentoEmpresa @default(OUTRO)
-  telefone     String?
-  cidade       String?
-  estado       String?
-  configuracoes Json           @default("{}")
-  criadoEm     DateTime        @default(now())
-  atualizadoEm DateTime        @updatedAt
+  id            String          @id @default(uuid())
+  nome          String
+  nomeFantasia  String?
+  segmento      SegmentoEmpresa @default(OUTRO)
+  telefone      String?
+  cidade        String?
+  estado        String?
+  logoArquivoId String?
+  configuracoes Json            @default("{}")
+  criadoEm      DateTime        @default(now())
+  atualizadoEm  DateTime        @updatedAt
 
-  usuarios            Usuario[]
-  contatos            Contato[]
-  obras               Obra[]
-  contatosObras       ContatoObra[]
-  categorias          Categoria[]
-  etapasFunil         EtapaFunil[]
-  oportunidades       Oportunidade[]
-  historicosEtapa     HistoricoEtapaOportunidade[]
-  atividades          Atividade[]
-  conexoes            ConexaoWhatsApp[]
-  conversas           Conversa[]
-  mensagens           Mensagem[]
-  arquivos            Arquivo[]
+  usuarios             Usuario[]
+  contatos             Contato[]
+  obras                Obra[]
+  contatosObras        ContatoObra[]
+  categorias           Categoria[]
+  etapasFunil          EtapaFunil[]
+  oportunidades        Oportunidade[]
+  historicosEtapa      HistoricoEtapaOportunidade[]
+  eventosOportunidade  EventoOportunidade[]
+  atividades           Atividade[]
+  conexoes             ConexaoWhatsApp[]
+  conversas            Conversa[]
+  mensagens            Mensagem[]
+  arquivos             Arquivo[]
   camposPersonalizados CampoPersonalizado[]
+  produtos             Produto[]
+  orcamentos           Orcamento[]
+  movimentacoesEstoque MovimentacaoEstoque[]
 
   @@map("empresas")
 }
@@ -343,6 +361,8 @@ model Oportunidade {
   etapa           EtapaFunil                   @relation(fields: [etapaId], references: [id])
   atividades      Atividade[]
   historicoEtapas HistoricoEtapaOportunidade[]
+  eventos         EventoOportunidade[]
+  orcamentos      Orcamento[]
 
   @@unique([empresaId, codigo])
   @@index([empresaId])
@@ -370,6 +390,27 @@ model HistoricoEtapaOportunidade {
   @@index([empresaId])
   @@index([oportunidadeId, criadoEm])
   @@map("historicos_etapa_oportunidade")
+}
+
+/// Fonte única da timeline. Eventos são imutáveis e derivados de ações reais do produto.
+model EventoOportunidade {
+  id             String   @id @default(uuid())
+  empresaId      String
+  oportunidadeId String
+  tipo           String
+  titulo         String
+  descricao      String?
+  origem         String   @default("SISTEMA")
+  dados          Json     @default("{}")
+  usuarioId      String?
+  criadoEm       DateTime @default(now())
+
+  empresa      Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  oportunidade Oportunidade @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId, criadoEm])
+  @@index([oportunidadeId, criadoEm])
+  @@map("eventos_oportunidade")
 }
 
 model Atividade {
@@ -507,7 +548,7 @@ model CampoPersonalizado {
   descricao     String?
   tipo          TipoCampoPersonalizado
   obrigatorio   Boolean                    @default(false)
-  opcoes        String[]                   @default([])
+  opcoes        Json                       @default("[]")
   ordem         Int                        @default(0)
   ativo         Boolean                    @default(true)
   usarNoChatbot Boolean                    @default(false)
@@ -522,4 +563,103 @@ model CampoPersonalizado {
   @@unique([empresaId, entidade, chave])
   @@index([empresaId, entidade])
   @@map("campos_personalizados")
+}
+
+model Produto {
+  id              String   @id @default(uuid())
+  empresaId       String
+  sku             String?
+  nome            String
+  descricao       String?
+  unidade         String   @default("un")
+  precoVenda      Float    @default(0)
+  estoqueAtual    Float    @default(0)
+  estoqueMinimo   Float    @default(0)
+  controlaEstoque Boolean  @default(true)
+  ativo           Boolean  @default(true)
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+
+  empresa        Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  itensOrcamento ItemOrcamento[]
+  movimentacoes  MovimentacaoEstoque[]
+
+  @@index([empresaId])
+  @@index([empresaId, ativo])
+  @@unique([empresaId, sku])
+  @@map("produtos")
+}
+
+model Orcamento {
+  id             String          @id @default(uuid())
+  empresaId      String
+  oportunidadeId String
+  numero         String
+  versao         Int             @default(1)
+  status         StatusOrcamento @default(RASCUNHO)
+  vigente        Boolean         @default(false)
+  observacoes    String?
+  descontoValor  Float           @default(0)
+  subtotal       Float           @default(0)
+  total          Float           @default(0)
+  validadeEm     DateTime?
+  arquivoId      String?
+  enviadoEm      DateTime?
+  aceitoEm       DateTime?
+  convertidoEm   DateTime?
+  criadoPorId    String?
+  criadoEm       DateTime        @default(now())
+  atualizadoEm   DateTime        @updatedAt
+
+  empresa      Empresa         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  oportunidade Oportunidade    @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+  itens        ItemOrcamento[]
+
+  @@unique([empresaId, numero])
+  @@index([empresaId])
+  @@index([oportunidadeId, versao])
+  @@index([oportunidadeId, vigente])
+  @@map("orcamentos")
+}
+
+model ItemOrcamento {
+  id            String  @id @default(uuid())
+  orcamentoId   String
+  produtoId     String?
+  nome          String
+  unidade       String  @default("un")
+  quantidade    Float
+  precoUnitario Float
+  desconto      Float   @default(0)
+  totalLinha    Float
+  ordem         Int     @default(0)
+
+  orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  produto   Produto?  @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+
+  @@index([orcamentoId])
+  @@index([produtoId])
+  @@map("itens_orcamento")
+}
+
+model MovimentacaoEstoque {
+  id             String                  @id @default(uuid())
+  empresaId      String
+  produtoId      String
+  tipo           TipoMovimentacaoEstoque
+  quantidade     Float
+  saldoApos      Float
+  orcamentoId    String?
+  oportunidadeId String?
+  observacao     String?
+  usuarioId      String?
+  criadoEm       DateTime                @default(now())
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId, criadoEm])
+  @@index([produtoId, criadoEm])
+  @@index([orcamentoId])
+  @@map("movimentacoes_estoque")
 }

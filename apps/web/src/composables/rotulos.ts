@@ -100,6 +100,7 @@ export const ROTULO_DIRECAO: Record<DirecaoMensagem, string> = {
 };
 
 export const ROTULO_INTENCAO: Record<IntencaoChatbot, string> = {
+  VENDAS: 'Vendas',
   NOVO_ORCAMENTO: 'Novo orçamento',
   NEGOCIAR_ORCAMENTO: 'Negociar orçamento',
   AJUSTAR_ORCAMENTO: 'Ajustar orçamento',
@@ -107,6 +108,7 @@ export const ROTULO_INTENCAO: Record<IntencaoChatbot, string> = {
   ACOMPANHAR_SOLICITACAO: 'Acompanhar solicitação',
   FINANCEIRO: 'Financeiro',
   ENTREGA: 'Entrega',
+  SAC: 'S.A.C',
   POS_VENDA: 'Pós-venda',
   FALAR_COM_PESSOA: 'Falar com pessoa',
   OUTRO: 'Outro',

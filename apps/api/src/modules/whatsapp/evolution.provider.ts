@@ -3,6 +3,8 @@ import { StatusConexaoWhatsApp } from '@arcco/contratos';
 import { carregarEnv } from '../../config/env';
 import type {
   EnvioResultado,
+  MidiaBaixada,
+  MidiaParaEnvio,
   OpcoesEnvioTexto,
   ResultadoConexao,
   WhatsAppProvider,
@@ -142,6 +144,37 @@ export class EvolutionWhatsAppProvider implements WhatsAppProvider {
     return { idExterno: resposta.dados?.key?.id, status: 'ENVIADA' };
   }
 
+  async enviarMidia(
+    nomeInstancia: string,
+    telefone: string,
+    midia: MidiaParaEnvio,
+  ): Promise<EnvioResultado> {
+    const number = toEvolutionNumber(telefone);
+    const mediatype = tipoMidiaEvolution(midia.mime);
+    const body = {
+      number,
+      mediatype,
+      mimetype: midia.mime,
+      caption: (midia.caption ?? '').slice(0, 1024),
+      media: midia.buffer.toString('base64'),
+      fileName: midia.nome,
+    };
+    const resposta = await this.request<{ key?: { id?: string } }>(
+      `/message/sendMedia/${encodeURIComponent(nomeInstancia)}`,
+      { method: 'POST', body: JSON.stringify(body) },
+    );
+    if (!resposta.ok) {
+      this.logger.error(
+        `Falha ao enviar arquivo para ${number}: HTTP ${resposta.status} ${resposta.texto.slice(0, 200)}`,
+      );
+      return { status: 'ERRO', erro: `HTTP ${resposta.status}: ${resposta.texto.slice(0, 200)}` };
+    }
+    this.logger.log(
+      `Arquivo aceito pela Evolution destino=${number} nome=${midia.nome} id=${resposta.dados?.key?.id ?? '?'}`,
+    );
+    return { idExterno: resposta.dados?.key?.id, status: 'ENVIADA' };
+  }
+
   async conectar(nomeInstancia: string): Promise<ResultadoConexao> {
     await this.garantirInstancia(nomeInstancia);
 
@@ -204,6 +237,35 @@ export class EvolutionWhatsAppProvider implements WhatsAppProvider {
     return { status: StatusConexaoWhatsApp.DESCONECTADO, numero };
   }
 
+  /**
+   * Baixa mídia (PDF, imagem, áudio) a partir do item do webhook/poller.
+   * Evolution: POST /chat/getBase64FromMediaMessage/{instance}
+   */
+  async baixarMidia(
+    nomeInstancia: string,
+    item: Record<string, unknown>,
+  ): Promise<MidiaBaixada | null> {
+    const chave = (item.key ?? {}) as { id?: string };
+    const corpos: unknown[] = [
+      { message: item, convertToMp4: false },
+      { message: item.message ?? item, convertToMp4: false },
+      { message: { key: { id: chave.id } }, convertToMp4: false },
+    ];
+
+    for (const body of corpos) {
+      const resposta = await this.request<unknown>(
+        `/chat/getBase64FromMediaMessage/${encodeURIComponent(nomeInstancia)}`,
+        { method: 'POST', body: JSON.stringify(body) },
+      );
+      const extraido = extrairBase64Midia(resposta.dados);
+      if (extraido) return extraido;
+      this.logger.warn(
+        `getBase64 midia ${chave.id ?? '?'}: HTTP ${resposta.status} ${resposta.texto.slice(0, 160)}`,
+      );
+    }
+    return null;
+  }
+
   /** Busca mensagens recentes (fallback quando o webhook nao chega). */
   async buscarMensagensRecentes(nomeInstancia: string, limite = 40): Promise<
     Array<{
@@ -244,9 +306,46 @@ export class EvolutionWhatsAppProvider implements WhatsAppProvider {
 }
 
 /**
- * Destino Evolution: se for @lid, mantém (mesmo chat do cliente).
- * Caso contrário, só dígitos (como Pacelia `toEvolutionNumber`).
+ * Extrai buffer de /chat/getBase64FromMediaMessage.
  */
+function extrairBase64Midia(dados: unknown): MidiaBaixada | null {
+  if (!dados || typeof dados !== 'object') return null;
+  const obj = dados as Record<string, unknown>;
+  const inner =
+    obj.data && typeof obj.data === 'object' ? (obj.data as Record<string, unknown>) : obj;
+  const bruto = inner.base64 ?? inner.media;
+  if (typeof bruto !== 'string' || !bruto.trim()) return null;
+  let b64 = bruto;
+
+  let mime =
+    (typeof inner.mimetype === 'string' && inner.mimetype) ||
+    (typeof inner.mimeType === 'string' && inner.mimeType) ||
+    'application/octet-stream';
+
+  const dataUrl = b64.match(/^data:([^;]+);base64,(.+)$/s);
+  if (dataUrl) {
+    mime = dataUrl[1] || mime;
+    b64 = dataUrl[2] ?? b64;
+  }
+
+  const buffer = Buffer.from(b64, 'base64');
+  if (!buffer.length) return null;
+
+  const nome =
+    (typeof inner.fileName === 'string' && inner.fileName) ||
+    (typeof inner.filename === 'string' && inner.filename) ||
+    'arquivo';
+
+  return { buffer, mime, nome };
+}
+
+function tipoMidiaEvolution(mime: string): 'image' | 'video' | 'audio' | 'document' {
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('video/')) return 'video';
+  if (mime.startsWith('audio/')) return 'audio';
+  return 'document';
+}
+
 function toEvolutionNumber(phone: string): string {
   const bruto = String(phone || '').trim().replace(/^whatsapp:/i, '');
   if (bruto.includes('@lid')) return bruto;

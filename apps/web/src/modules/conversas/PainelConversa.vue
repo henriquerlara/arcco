@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
-import { Bot, Send, UserCheck, CheckCircle2, Info } from 'lucide-vue-next';
+import { Bot, FileText, Send, UserCheck, CheckCircle2, Info } from 'lucide-vue-next';
 import { DirecaoMensagem, ModoAtendimento } from '@arcco/contratos';
 import type { Conversa, Mensagem } from '@/types';
 import Button from '@/components/ui/Button.vue';
 import BadgeStatus from '@/components/compartilhados/BadgeStatus.vue';
 import { formatarHora, iniciais } from '@/composables/formatadores';
 import { cn } from '@/composables/cn';
+import { servicoArquivos } from '@/services';
 
 const props = defineProps<{
   conversa: Conversa | null;
@@ -24,6 +25,8 @@ const emit = defineEmits<{
 
 const texto = ref('');
 const areaMensagens = ref<HTMLElement | null>(null);
+const previewsImagem = ref<Record<string, string>>({});
+const abrindoArquivoId = ref<string | null>(null);
 
 const podeEnviar = computed(
   () => props.conversa?.modo === ModoAtendimento.HUMANO,
@@ -38,6 +41,32 @@ async function rolarParaFim() {
 
 watch(() => props.mensagens.length, rolarParaFim);
 watch(() => props.conversa?.id, rolarParaFim);
+
+watch(
+  () => props.mensagens,
+  async (mensagens) => {
+    for (const msg of mensagens) {
+      if (msg.tipo !== 'IMAGEM' || !msg.arquivoId || previewsImagem.value[msg.arquivoId]) continue;
+      try {
+        const blob = await servicoArquivos.blob(msg.arquivoId);
+        previewsImagem.value[msg.arquivoId] = URL.createObjectURL(blob);
+      } catch {
+        /* preview opcional */
+      }
+    }
+  },
+  { immediate: true },
+);
+
+async function abrirArquivo(msg: Mensagem) {
+  if (!msg.arquivoId || abrindoArquivoId.value) return;
+  abrindoArquivoId.value = msg.arquivoId;
+  try {
+    await servicoArquivos.abrir(msg.arquivoId);
+  } finally {
+    abrindoArquivoId.value = null;
+  }
+}
 
 function enviar() {
   const valor = texto.value.trim();
@@ -57,10 +86,10 @@ function aoTeclar(evento: KeyboardEvent) {
 <template>
   <section class="flex h-full flex-col bg-superficie">
     <template v-if="conversa">
-      <header class="flex items-center justify-between gap-3 border-b border-borda bg-branco px-5 py-3">
-        <div class="flex items-center gap-3">
+      <header class="flex items-center justify-between gap-3 border-b border-borda bg-branco px-3 py-3 pl-12 md:px-5">
+        <div class="flex min-w-0 items-center gap-3">
           <span
-            class="flex size-10 items-center justify-center rounded-full bg-carvao text-sm font-semibold text-dourado-claro"
+            class="flex size-10 shrink-0 items-center justify-center rounded-full bg-carvao text-sm font-semibold text-dourado-claro"
           >
             {{ iniciais(conversa.nomeExibicao ?? conversa.contato?.nome ?? conversa.telefone) }}
           </span>
@@ -74,7 +103,7 @@ function aoTeclar(evento: KeyboardEvent) {
             </div>
           </div>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex shrink-0 items-center gap-2">
           <Button
             v-if="conversa.modo !== ModoAtendimento.HUMANO"
             variante="primario"
@@ -91,18 +120,18 @@ function aoTeclar(evento: KeyboardEvent) {
             @click="emit('devolver-bot')"
           >
             <Bot class="size-4" />
-            Devolver ao bot
+            <span class="hidden lg:inline">Devolver ao bot</span>
           </Button>
           <Button variante="contorno" tamanho="sm" @click="emit('finalizar')">
             <CheckCircle2 class="size-4" />
-            Finalizar
+            <span class="hidden lg:inline">Finalizar</span>
           </Button>
         </div>
       </header>
 
       <div
         ref="areaMensagens"
-        class="flex-1 space-y-3 overflow-y-auto bg-marfim/30 px-5 py-4"
+        class="area-mensagens flex-1 space-y-3 overflow-y-auto bg-marfim/30 px-4 py-5 md:px-6"
       >
         <div v-if="carregando" class="py-10 text-center text-sm text-texto-secundario">
           Carregando mensagens…
@@ -133,9 +162,9 @@ function aoTeclar(evento: KeyboardEvent) {
               v-else
               :class="
                 cn(
-                  'max-w-[70%] rounded-lg px-3.5 py-2 text-sm shadow-suave',
+                  'max-w-[82%] rounded-md px-3.5 py-2.5 text-sm md:max-w-[70%]',
                   msg.direcao === DirecaoMensagem.ENVIADA
-                    ? 'rounded-br-sm bg-dourado text-preto'
+                    ? 'rounded-br-none bg-carvao text-marfim'
                     : 'rounded-bl-sm border border-borda bg-branco text-texto',
                 )
               "
@@ -146,13 +175,33 @@ function aoTeclar(evento: KeyboardEvent) {
               >
                 <Bot class="size-3" /> Bot
               </p>
-              <p class="whitespace-pre-wrap break-words">{{ msg.conteudo }}</p>
+              <img
+                v-if="msg.tipo === 'IMAGEM' && msg.arquivoId && previewsImagem[msg.arquivoId]"
+                :src="previewsImagem[msg.arquivoId]"
+                :alt="msg.conteudo"
+                class="mb-2 max-h-56 w-full rounded-md object-contain"
+              />
+              <button
+                v-if="msg.arquivoId"
+                type="button"
+                class="mb-1 flex w-full items-center gap-2 rounded-md border border-current/15 bg-black/5 px-2.5 py-1.5 text-left text-xs font-medium hover:bg-black/10"
+                @click="abrirArquivo(msg)"
+              >
+                <FileText class="size-3.5 shrink-0" />
+                <span class="min-w-0 truncate">{{ msg.conteudo || 'Abrir arquivo' }}</span>
+              </button>
+              <p
+                v-else-if="msg.conteudo"
+                class="whitespace-pre-wrap break-words"
+              >
+                {{ msg.conteudo }}
+              </p>
               <p
                 :class="
                   cn(
                     'mt-1 text-right text-[10px]',
                     msg.direcao === DirecaoMensagem.ENVIADA
-                      ? 'text-preto/50'
+                      ? 'text-marfim/45'
                       : 'text-texto-secundario',
                   )
                 "
@@ -178,7 +227,7 @@ function aoTeclar(evento: KeyboardEvent) {
             rows="1"
             :disabled="!podeEnviar || enviando"
             placeholder="Escreva uma mensagem…"
-            class="max-h-32 min-h-[42px] flex-1 resize-none rounded-md border border-borda bg-superficie px-3 py-2.5 text-sm outline-none focus:border-dourado focus:ring-2 focus:ring-ring disabled:opacity-60"
+            class="max-h-32 min-h-[42px] flex-1 resize-none rounded-md border border-borda bg-superficie px-3 py-2.5 text-sm outline-none focus:border-carvao focus:ring-2 focus:ring-carvao/10 disabled:opacity-60"
             @keydown="aoTeclar"
           />
           <Button
@@ -201,3 +250,12 @@ function aoTeclar(evento: KeyboardEvent) {
     </div>
   </section>
 </template>
+
+<style scoped>
+.area-mensagens {
+  background-image:
+    linear-gradient(rgba(8, 47, 52, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(8, 47, 52, 0.025) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+</style>

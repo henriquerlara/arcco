@@ -1,13 +1,35 @@
-# ARCCO — Chatbot
+# ARCCO — Chatbot (Ecolume v8)
 
-O chatbot faz a triagem inicial das conversas de WhatsApp: cumprimenta, oferece um menu, coleta dados de orçamento e transfere para um atendente humano quando necessário.
+O chatbot faz a triagem inicial das conversas de WhatsApp seguindo o **fluxo oficial Ecolume v8**: cumprimenta, oferece o menu de 5 seções, coleta dados em cada ramificação e transfere para um atendente humano com resumo estruturado.
 
 Implementação:
 
+- `apps/api/src/modules/chatbot/mensagens-ecolume.ts` — textos oficiais do PDF v8.
 - `apps/api/src/modules/chatbot/maquina-estados.ts` — **máquina de estados pura** (sem I/O), determinística e testada.
-- `apps/api/src/modules/chatbot/chatbot.service.ts` — orquestração (efeitos colaterais: persistir estado, criar oportunidade, transferir).
-- `apps/api/src/modules/ia/` — classificação de intenção (`rules` ou `openai`).
-- `apps/api/src/modules/ia/regras-intencao.ts` — regras/palavras-chave e leitura do menu numérico.
+- `apps/api/src/modules/chatbot/chatbot.service.ts` — orquestração (CPF, persistir estado/resumo, criar oportunidade, transferir).
+- `apps/api/src/modules/ia/` — classificação de intenção auxiliar (`rules` ou `openai`) quando o cliente não usa o menu numérico.
+
+---
+
+## Menu principal (PDF)
+
+```
+1 Vendas — Negociação, orçamento novo, ajuste de orçamento
+2 Financeiro — Segunda via de boleto e NF, contestação de cobrança
+3 S.A.C — Serviço de pós-venda
+4 Entrega — Informações sobre a entrega do seu pedido
+5 Outros
+```
+
+Opção inválida: *"Não consegui identificar sua seleção. Por favor, escolha uma das opções disponíveis."*
+
+### Personalização por empresa
+
+Única parte configurável: `chatbot.textoPerguntaProjeto` (padrão: `"a lista de materiais"`).
+
+Usada em Novo Orçamento:
+
+> Para elaborarmos seu orçamento com precisão, você já possui **{textoPerguntaProjeto}**?
 
 ---
 
@@ -15,121 +37,80 @@ Implementação:
 
 Enum `IntencaoChatbot` (`@arcco/contratos`):
 
-| Intenção | Significado | Ação no MVP |
-| --- | --- | --- |
-| `NOVO_ORCAMENTO` | Cliente quer orçar/comprar | Inicia o fluxo de coleta de orçamento. |
-| `NEGOCIAR_ORCAMENTO` | Desconto/condições | Transfere para humano. |
-| `AJUSTAR_ORCAMENTO` | Alterar/revisar orçamento | Transfere para humano. |
-| `DUVIDA` | Dúvida/informação | Transfere para humano. |
-| `ACOMPANHAR_SOLICITACAO` | Status/andamento | Transfere para humano. |
-| `FINANCEIRO` | Boleto, NF, pagamento | Transfere para humano. |
-| `ENTREGA` | Prazo, frete, rastreio | Transfere para humano. |
-| `POS_VENDA` | Garantia, troca, assistência | Transfere para humano. |
-| `FALAR_COM_PESSOA` | Falar com atendente | Transfere para humano. |
-| `OUTRO` | Não reconhecida | Reapresenta o menu (até o limite). |
+| Intenção | Uso no v8 |
+| --- | --- |
+| `VENDAS` | Menu 1 / palavras “vendas”, “comercial” |
+| `NOVO_ORCAMENTO` / `NEGOCIAR_*` / `AJUSTAR_*` | NLP → entra no submenu de Vendas |
+| `FINANCEIRO` | Menu 2 |
+| `SAC` / `POS_VENDA` | Menu 3 |
+| `ENTREGA` / `ACOMPANHAR_SOLICITACAO` | Menu 4 |
+| `OUTRO` / `DUVIDA` / `FALAR_COM_PESSOA` | Menu 5 (descrição livre) |
 
 ### Como a intenção é detectada
 
-1. **Menu numérico** (`intencaoPorOpcaoMenu`): se a mensagem começa com `1`–`4`, mapeia direto:
-   - `1` → `NOVO_ORCAMENTO`
-   - `2` → `ACOMPANHAR_SOLICITACAO`
-   - `3` → `DUVIDA`
-   - `4` → `FALAR_COM_PESSOA`
-2. **Classificação** (`AI_PROVIDER`):
-   - `rules` (padrão): regex/palavras-chave com peso (`classificarIntencaoRegras`). Ex.: "orçamento", "preço", "cotação" → `NOVO_ORCAMENTO`; "atendente", "humano", "vendedor" → `FALAR_COM_PESSOA`; "desconto", "negociar" → `NEGOCIAR_ORCAMENTO`; "boleto", "nota fiscal" → `FINANCEIRO`; etc. Retorna `{ intencao, confianca }`.
-   - `openai`: usa o SDK e o modelo `OPENAI_MODEL` para classificar (mesmo conjunto de intenções). Determinístico o suficiente para triagem; cai para regras/`OUTRO` quando indisponível.
-
-A opção de menu tem prioridade sobre a classificação livre.
+1. **Menu numérico** (`intencaoPorOpcaoMenu`): `1`–`5` mapeiam para Vendas / Financeiro / S.A.C / Entrega / Outros.
+2. **Dentro das ramificações**, opções numéricas são lidas **pela máquina de estados** (não pela IA).
+3. **Classificação** (`AI_PROVIDER`): `rules` (regex) ou `openai` — fallback quando o cliente escreve texto livre no menu.
 
 ---
 
 ## Estados e fluxos
 
-A máquina tem três fluxos (`FLUXO`):
-
-- `MENU` — apresentação e roteamento por intenção.
-- `NOVO_ORCAMENTO` — coleta sequencial de dados.
-- `FINALIZADO` — encerrado (após criar oportunidade ou transferir).
-
-O estado persistido em `Conversa.estadoBot` (JSONB) tem o formato:
-
 ```json
-{ "fluxo": "NOVO_ORCAMENTO", "etapa": "1", "dadosColetados": {}, "ultimaPergunta": "_necessidade", "tentativas": 0 }
+{
+  "fluxo": "VENDAS",
+  "etapa": "novo_cpf",
+  "dadosColetados": { "tipoVendas": "Novo Orçamento", "cpf": "..." },
+  "resumo": "Seção: Vendas\n...",
+  "tentativas": 0
+}
 ```
 
-### Fluxo de menu / roteamento
+Fluxos: `MENU` · `VENDAS` · `FINANCEIRO` · `SAC` · `ENTREGA` · `OUTROS` · `FINALIZADO`.
 
-```
-Mensagem → (opção de menu? senão classifica intenção)
-   ├─ NOVO_ORCAMENTO      → inicia coleta
-   ├─ FALAR_COM_PESSOA    → transfere
-   ├─ ACOMPANHAR / FINANCEIRO / ENTREGA / POS_VENDA / NEGOCIAR / AJUSTAR / DUVIDA → transfere
-   └─ OUTRO (desconhecida)
-        ├─ primeira interação      → mostra saudação + menu
-        └─ tentativas >= 3         → transfere para humano
-```
+### Vendas → Novo Orçamento
 
-A saudação usa `chatbot.mensagemInicial` (config da empresa) e, fora do horário de atendimento, acrescenta `mensagemForaHorario`. O menu oferecido:
+1. Pede CPF.
+2. Service busca contato com `dadosPersonalizados.cpf` (normalizado).
+3. **Cadastro encontrado** → pergunta configurável (Sim/Não).
+4. **Cadastro não encontrado** → pede endereço da obra → mesma pergunta.
+5. Sim → pede arquivo/lista → `CRIAR_OPORTUNIDADE` + transferência.
+6. Não → mensagem de conexão com especialista → `CRIAR_OPORTUNIDADE` + transferência.
 
-```
-Escolha uma opção:
-1) Fazer um orçamento
-2) Acompanhar uma solicitação
-3) Tirar uma dúvida
-4) Falar com um atendente
-```
-
-### Fluxo de novo orçamento (coleta)
-
-As perguntas são montadas dinamicamente (`montarPerguntas`):
-
-1. **Nome** (`_nome`) — apenas se o contato é desconhecido e o nome não é conhecido.
-2. **Necessidade** (`_necessidade`) — "o que você precisa orçar (produto, serviço ou material)".
-3. **Campos personalizados** marcados com `usarNoChatbot=true` para a entidade OPORTUNIDADE (usam o `textoPergunta` configurado). Ex.: no segmento concreto, "Qual o volume aproximado em m³?", "Qual o FCK necessário?", "Vai precisar de bombeamento?".
-
-A cada resposta, o valor é salvo em `dadosColetados` e a `etapa` avança. Ao responder a última pergunta, o bot dispara a ação `CRIAR_OPORTUNIDADE` e envia a `mensagemFinal`.
-
-```
-início → _nome? → _necessidade → [campos personalizados...] → CRIAR_OPORTUNIDADE → FINALIZADO
-```
-
-O `ChatbotService` então cria a `Oportunidade` (com contato resolvido, etapa inicial do funil, `dadosPersonalizados` preenchidos) e associa a conversa a ela.
+Demais opções de Vendas (ajuste, negociação, dúvidas), Financeiro, S.A.C, Entrega e Outros seguem o PDF e terminam em `TRANSFERIR` com resumo.
 
 ---
 
-## Transferência para humano
+## Transferência e resumo
 
-A transferência acontece quando:
+Ao transferir:
 
-- A intenção é `FALAR_COM_PESSOA` (menu opção 4 ou palavras-chave).
-- A intenção exige atendimento humano (financeiro, entrega, pós-venda, acompanhar, negociar, ajustar, dúvida).
-- O bot não entende a mensagem após **3 tentativas** (`MAX_TENTATIVAS`).
+1. `estadoBot.resumo` e `dadosColetados._resumo` / `_secao` são persistidos.
+2. Uma mensagem `SISTEMA` com `[Resumo da triagem]` é gravada na conversa (visível no inbox).
+3. Conversa vai para `AGUARDANDO_HUMANO`.
 
-Efeito: o bot envia a `mensagemTransferencia`, o fluxo vai para `FINALIZADO` e o `ChatbotService` muda a conversa para `AGUARDANDO_HUMANO`. O atendente assume no inbox; ao responder (`POST /api/whatsapp/conversas/:id/enviar`), a conversa passa a `EM_ATENDIMENTO` e o `atendenteId` é registrado.
-
-Quando a conversa **não** está em modo `BOT` (`HUMANO`/`PAUSADO`), o bot não responde — as mensagens apenas são registradas e ficam para o atendente.
+O bot **nunca** informa preços, prazos de entrega ou disponibilidade.
 
 ---
 
 ## Horário de atendimento
 
-A configuração da empresa define janelas por dia da semana (`horarioAtendimento`). Fora do horário, o bot ainda **registra a solicitação** (inclusive coleta de orçamento), mas acrescenta a `mensagemForaHorario` na saudação, sinalizando que o atendimento humano continuará no próximo período. A verificação de horário é utilitária e testada (`common/utils/horario`).
+Fora do horário, o bot ainda executa a triagem, mas acrescenta `mensagemForaHorario` junto à saudação.
 
 ---
 
-## Limites da IA (MVP)
+## Limites
 
-- **O LLM só classifica intenção.** Não gera respostas livres nem negocia; as respostas do bot são textos determinísticos da máquina de estados/configuração.
-- **Somente texto.** O processamento trata mensagens de texto; mídia (áudio/imagem/documento) não é interpretada — transcrição e OCR são roadmap.
-- **Cobertura limitada de fluxos automáticos.** Apenas o menu e a coleta de orçamento são totalmente automatizados; as demais intenções transferem para humano.
-- **Determinismo e custo.** Com `AI_PROVIDER=rules` o bot roda 100% offline, sem custo e de forma previsível — ideal para testes e ambientes sem OpenAI.
-- **Sem contexto longo.** A máquina considera a mensagem atual + o estado persistido; não faz memória conversacional ampla nem raciocínio multi-turno além do fluxo definido.
+- Respostas são textos determinísticos do PDF (não geradas por LLM).
+- Mídia pedida (arquivo/foto) é aceita como resposta e o fluxo avança — o conteúdo não é interpretado.
+- Sem roteamento automático por setor (vendedor/financeiro/SAC): todos vão à fila humana, com a seção no resumo.
+- Campos personalizados `usarNoChatbot` **não** dirigem mais o fluxo (substituídos pelas etapas fixas do v8).
 
 ---
 
 ## Testes
 
-- `chatbot/maquina-estados.spec.ts` — cobre menu, coleta, criação de oportunidade e transferência.
-- `ia/regras-intencao.spec.ts` — cobre a classificação por regras e a leitura do menu numérico.
+- `chatbot/maquina-estados.spec.ts` — menu, Vendas/CPF, Financeiro, S.A.C, Entrega, Outros, opção inválida.
+- `ia/regras-intencao.spec.ts` — regras e menu 1–5.
 
-Para experimentar rapidamente, use o simulador do modo mock (ver [`EVOLUTION_API.md`](EVOLUTION_API.md#modo-mock-desenvolvimento)).
+Simulador mock: ver [`EVOLUTION_API.md`](EVOLUTION_API.md#modo-mock-desenvolvimento).

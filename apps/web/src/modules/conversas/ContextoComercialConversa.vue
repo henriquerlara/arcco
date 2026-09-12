@@ -12,11 +12,26 @@ defineProps<{
   contexto: ContextoComercial | null;
   carregando?: boolean;
 }>();
+
+const ROTULO_DADO_BOT: Record<string, string> = {
+  tipoVendas: 'Tipo',
+  codigoOrcamento: 'Código do orçamento',
+  descricaoAjuste: 'O que deve mudar',
+  cpf: 'CPF',
+  enderecoObra: 'Endereço da obra',
+  temProjeto: 'Possui projeto/lista?',
+  arquivoRecebido: 'Arquivo/lista',
+  cadastroEncontrado: 'Cadastro',
+};
+
+function rotuloDadoBot(chave: string): string {
+  return ROTULO_DADO_BOT[chave] ?? chave;
+}
 </script>
 
 <template>
   <aside class="flex h-full flex-col gap-4 overflow-y-auto bg-branco p-4">
-    <h3 class="text-xs font-semibold uppercase tracking-wider text-texto-secundario">
+    <h3 class="rotulo-editorial border-b border-borda pb-3 text-dourado-hover">
       Contexto comercial
     </h3>
 
@@ -29,9 +44,9 @@ defineProps<{
       <!-- Resumo da IA -->
       <section
         v-if="contexto.resumo"
-        class="rounded-md border border-dourado/25 bg-dourado/8 p-3"
+        class="rounded-md border border-carvao/15 bg-carvao/[0.055] p-3"
       >
-        <p class="mb-1 flex items-center gap-1.5 text-xs font-semibold text-[#8a6d24]">
+        <p class="mb-1 flex items-center gap-1.5 text-xs font-semibold text-carvao">
           <Sparkles class="size-3.5" /> Resumo automático
         </p>
         <p class="text-sm text-texto">{{ contexto.resumo }}</p>
@@ -90,7 +105,7 @@ defineProps<{
           :to="`/app/oportunidades/${contexto.oportunidade.id}`"
           class="text-sm font-medium text-texto hover:text-dourado-hover"
         >
-          {{ contexto.oportunidade.titulo }}
+          {{ contexto.oportunidade.codigo }}
         </RouterLink>
         <p
           v-if="contexto.oportunidade.valorEstimado"
@@ -118,7 +133,7 @@ defineProps<{
             :key="chave"
             class="flex justify-between gap-2"
           >
-            <dt class="text-texto-secundario">{{ chave }}</dt>
+            <dt class="text-texto-secundario">{{ rotuloDadoBot(String(chave)) }}</dt>
             <dd class="text-right font-medium text-texto">{{ valor }}</dd>
           </div>
         </dl>

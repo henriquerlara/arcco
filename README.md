@@ -13,7 +13,7 @@ O objetivo do MVP é centralizar contatos, obras, oportunidades (funil de vendas
 - [Requisitos](#requisitos)
 - [Instalação](#instalação)
 - [Variáveis de ambiente (.env)](#variáveis-de-ambiente-env)
-- [Banco de dados — Postgres local (Docker) e Neon](#banco-de-dados--postgres-local-docker-e-neon)
+- [Banco de dados local](#banco-de-dados-local)
 - [Migrations e seed](#migrations-e-seed)
 - [Execução (frontend e API)](#execução-frontend-e-api)
 - [Modo mock do WhatsApp](#modo-mock-do-whatsapp)
@@ -35,7 +35,7 @@ O objetivo do MVP é centralizar contatos, obras, oportunidades (funil de vendas
 O produto é composto por três pacotes em um monorepo pnpm:
 
 - **`apps/web`** — SPA em Vue 3 (Vite, Tailwind, Pinia, Vue Router, TanStack Query). É o painel usado por proprietários, gestores, vendedores e atendentes.
-- **`apps/api`** — API em NestJS sobre Fastify, com Prisma/PostgreSQL. Expõe as rotas REST sob o prefixo `/api`, cuida de autenticação (JWT em cookies httpOnly), isolamento multiempresa, chatbot e integração com o WhatsApp.
+- **`apps/api`** — API em NestJS sobre Fastify, com Prisma/SQLite local. Expõe as rotas REST sob o prefixo `/api`, cuida de autenticação (JWT em cookies httpOnly), isolamento multiempresa, timeline de eventos, chatbot e integração com o WhatsApp.
 - **`packages/contratos`** — biblioteca compartilhada de **schemas Zod, tipos e enums** consumida tanto pela API quanto pelo frontend, garantindo contratos únicos entre back e front.
 
 Principais capacidades do MVP:
@@ -59,7 +59,7 @@ Principais capacidades do MVP:
 - Tailwind CSS 3 + tokens de marca (design system próprio, base shadcn-vue / radix-vue)
 - Pinia (estado), Vue Router (rotas), TanStack Vue Query (dados do servidor)
 - vee-validate + Zod (formulários), ECharts / vue-echarts (gráficos)
-- vue-draggable-plus (kanban), lucide-vue-next (ícones), vue-sonner (toasts)
+- lucide-vue-next (ícones), vue-sonner (toasts)
 - Fontes: Manrope (sans) e Cormorant Garamond (serif/marca)
 - Playwright (e2e), Vitest (unitário)
 
@@ -85,8 +85,7 @@ Principais capacidades do MVP:
 
 - **Node.js 20+** (o monorepo declara `"engines": { "node": ">=20" }`)
 - **pnpm 9** (`packageManager: pnpm@9.15.9`)
-- **PostgreSQL 14+** — local (recomenda-se via Docker) ou um banco gerenciado (Neon)
-- Opcional: Docker (para subir o PostgreSQL local), instância da Evolution API (WhatsApp real), conta OpenAI, bucket Cloudflare R2, coletor OpenTelemetry
+- Opcional: Docker (somente para a Evolution API/WhatsApp real), conta OpenAI, bucket Cloudflare R2 e coletor OpenTelemetry
 
 Instalar o pnpm, se necessário:
 
@@ -121,7 +120,7 @@ A configuração fica em um único arquivo **`.env` na raiz** do repositório. U
 cp .env.example .env
 ```
 
-> O `.env` já é ignorado pelo Git (ver `.gitignore`). O repositório já inclui um `.env` de desenvolvimento apontando para o Postgres local na porta `5434`.
+> O `.env` já é ignorado pelo Git. O banco não precisa de variável: fica em `apps/api/prisma/arcco.db`.
 
 Conteúdo do `.env.example` (comentado por seção):
 
@@ -130,17 +129,15 @@ Conteúdo do `.env.example` (comentado por seção):
 NODE_ENV=development
 PORT=3000
 FRONTEND_URL=http://localhost:5173
-DATABASE_URL=postgresql://arcco:arcco@127.0.0.1:5434/arcco?schema=public
-DIRECT_URL=postgresql://arcco:arcco@127.0.0.1:5434/arcco?schema=public
 JWT_ACCESS_SECRET=altere-este-segredo-access-em-producao-min-32
 JWT_REFRESH_SECRET=altere-este-segredo-refresh-em-producao-min-32
 JWT_ACCESS_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
-WHATSAPP_PROVIDER=mock
-EVOLUTION_API_URL=
-EVOLUTION_API_KEY=
-EVOLUTION_WEBHOOK_SECRET=altere-este-segredo-webhook
-API_PUBLIC_URL=http://localhost:3000
+WHATSAPP_PROVIDER=evolution
+EVOLUTION_API_URL=http://127.0.0.1:8080
+EVOLUTION_API_KEY=arcco-evolution-dev-key-change-me
+EVOLUTION_WEBHOOK_SECRET=arcco-webhook-secret-dev-change-me
+API_PUBLIC_URL=http://host.docker.internal:3000
 AI_PROVIDER=rules
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
@@ -159,6 +156,7 @@ VITE_API_URL=http://localhost:3000
 VITE_APP_NAME=ARCCO
 ```
 
+Se precisar de WhatsApp real, suba apenas a stack opcional da Evolution com `docker compose up -d`.
 Descrição das variáveis (validadas por Zod em `apps/api/src/config/env.ts`):
 
 | Variável | Obrigatória | Padrão | Descrição |
@@ -166,17 +164,15 @@ Descrição das variáveis (validadas por Zod em `apps/api/src/config/env.ts`):
 | `NODE_ENV` | não | `development` | `development` \| `test` \| `production` |
 | `PORT` | não | `3000` | Porta HTTP da API |
 | `FRONTEND_URL` | não | `http://localhost:5173` | Origem liberada no CORS |
-| `DATABASE_URL` | **sim** | — | String de conexão do PostgreSQL |
-| `DIRECT_URL` | não | — | Conexão direta (usada pelo Prisma; útil no Neon com pooler) |
 | `JWT_ACCESS_SECRET` | **sim** | — | Segredo do access token (mín. 16 chars; use 32+ em produção) |
 | `JWT_REFRESH_SECRET` | **sim** | — | Segredo do refresh token |
 | `JWT_ACCESS_EXPIRES_IN` | não | `15m` | Validade do access token |
 | `JWT_REFRESH_EXPIRES_IN` | não | `7d` | Validade do refresh token |
-| `WHATSAPP_PROVIDER` | não | `mock` | `mock` \| `evolution` |
-| `EVOLUTION_API_URL` | não | `` | URL base da Evolution API |
-| `EVOLUTION_API_KEY` | não | `` | API key da Evolution |
+| `WHATSAPP_PROVIDER` | não | `mock` | `mock` \| `evolution` (dev local usa `evolution`) |
+| `EVOLUTION_API_URL` | não | `` | URL base da Evolution API (`http://127.0.0.1:8080`) |
+| `EVOLUTION_API_KEY` | não | `` | API key da Evolution (igual a `AUTHENTICATION_API_KEY`) |
 | `EVOLUTION_WEBHOOK_SECRET` | não | `` | Segredo validado no header `x-webhook-secret` |
-| `API_PUBLIC_URL` | não | `http://localhost:3000` | URL pública da API (webhook) |
+| `API_PUBLIC_URL` | não | `http://localhost:3000` | URL da API vista pela Evolution (`host.docker.internal` no Docker) |
 | `AI_PROVIDER` | não | `rules` | `rules` (offline) \| `openai` |
 | `OPENAI_API_KEY` | não | `` | Chave da OpenAI (quando `AI_PROVIDER=openai`) |
 | `OPENAI_MODEL` | não | `gpt-4o-mini` | Modelo usado na classificação de intenção |
@@ -190,55 +186,17 @@ Descrição das variáveis (validadas por Zod em `apps/api/src/config/env.ts`):
 
 ---
 
-## Banco de dados — Postgres local (Docker) e Neon
+## Banco de dados local
 
-### PostgreSQL local com Docker (recomendado para desenvolvimento)
+O ARCCO usa SQLite. O arquivo `apps/api/prisma/arcco.db` é criado automaticamente e permanece no dispositivo entre sessões. Não é necessário instalar, configurar ou manter um servidor de banco.
 
-O `.env` de desenvolvimento aponta para:
-
-```
-postgresql://arcco:arcco@127.0.0.1:5434/arcco?schema=public
-```
-
-Suba um container compatível (usuário `arcco`, senha `arcco`, banco `arcco`, porta host `5434`):
-
-```bash
-docker run --name arcco-postgres \
-  -e POSTGRES_USER=arcco \
-  -e POSTGRES_PASSWORD=arcco \
-  -e POSTGRES_DB=arcco \
-  -p 5434:5432 \
-  -d postgres:16
-```
-
-> A porta host `5434` é usada de propósito para não conflitar com uma instância local padrão do Postgres em `5432`.
-
-Para parar/remover:
-
-```bash
-docker stop arcco-postgres && docker rm arcco-postgres
-```
-
-### Neon (PostgreSQL gerenciado)
-
-Para usar o [Neon](https://neon.tech):
-
-1. Crie um projeto e um banco.
-2. Copie a connection string. O Neon fornece duas URLs — a **pooled** (com `-pooler`) e a **direta**.
-3. Configure no `.env`:
-
-```env
-DATABASE_URL="postgresql://<user>:<senha>@<host>-pooler.<regiao>.aws.neon.tech/<db>?sslmode=require"
-DIRECT_URL="postgresql://<user>:<senha>@<host>.<regiao>.aws.neon.tech/<db>?sslmode=require"
-```
-
-`DATABASE_URL` é usada pela aplicação em runtime; `DIRECT_URL` é usada pelo Prisma para migrations (evita passar pelo pooler). Sempre inclua `sslmode=require` no Neon.
+As migrations rodam automaticamente antes de `dev` e `start`. Para backup, pare a API e copie o arquivo `.db`. O histórico PostgreSQL anterior permanece em `apps/api/prisma/migrations-postgresql-legacy` apenas para consulta.
 
 ---
 
 ## Migrations e seed
 
-Com o banco no ar e o `.env` configurado:
+Com as dependências instaladas:
 
 ```bash
 # Gera o Prisma Client
@@ -299,7 +257,13 @@ Ele garante uma instância mock para a empresa e processa a mensagem pelo mesmo 
 
 ### Evolution API (WhatsApp real)
 
-Defina `WHATSAPP_PROVIDER=evolution` e preencha `EVOLUTION_API_URL`, `EVOLUTION_API_KEY` e `EVOLUTION_WEBHOOK_SECRET`. A API se comunica com a Evolution para enviar texto (`/message/sendText/:instancia`), conectar/gerar QR (`/instance/connect/:instancia`), desconectar e consultar estado. O webhook de entrada fica em `POST /api/webhooks/evolution` e valida o header `x-webhook-secret`. Guia completo: [`docs/EVOLUTION_API.md`](docs/EVOLUTION_API.md).
+O projeto já vem preparado para Evolution (`WHATSAPP_PROVIDER=evolution` no `.env`).
+
+1. Abra o Docker Desktop e rode `docker compose up -d` (somente a stack da Evolution).
+2. Suba a API (`pnpm dev:api`) e o web (`pnpm dev:web`).
+3. Em **Configurações → WhatsApp**, crie a conexão e escaneie o QR.
+
+A API cria a instância na Evolution e configura o webhook em `{API_PUBLIC_URL}/api/webhooks/evolution` automaticamente. Guia completo: [`docs/EVOLUTION_API.md`](docs/EVOLUTION_API.md).
 
 ### Cloudflare R2 (armazenamento de arquivos)
 
@@ -375,7 +339,7 @@ O seed também cria usuários vendedor e atendente para cada empresa (ex.: `vend
 
 ## Limitações do MVP
 
-- **Chatbot determinístico e enxuto:** a máquina de estados cobre menu, coleta de orçamento e transferência para humano. Intenções como financeiro, entrega, pós-venda e negociação **transferem para atendente** (não há respostas ricas automatizadas).
+- **Chatbot Ecolume v8:** máquina de estados cobre menu (Vendas, Financeiro, S.A.C, Entrega, Outros), coleta completa por ramificação e transferência com resumo. O bot não informa preços nem prazos; a única personalização é o texto da pergunta de materiais/projeto no orçamento.
 - **Sem envio de mídia pelo bot:** o processamento trata mensagens de **texto**; anexos/mídia recebidos não são interpretados.
 - **Sem tempo real (WebSocket):** o inbox usa polling via TanStack Query; não há push por socket.
 - **OpenAI limitado à classificação de intenção** (não gera respostas livres).
@@ -387,7 +351,7 @@ O seed também cria usuários vendedor e atendente para cada empresa (ex.: `vend
 
 ## Deploy
 
-Arquitetura sugerida: **frontend na Vercel**, **API na Railway ou Render**, **banco no Neon**.
+O modo suportado prioriza execução local. Em empacotamentos ou servidores próprios, mantenha `apps/api/prisma/arcco.db` em volume persistente e faça backups do arquivo.
 
 ### Frontend (Vercel)
 
@@ -405,10 +369,10 @@ Arquitetura sugerida: **frontend na Vercel**, **API na Railway ou Render**, **ba
 - Variáveis: todas da seção API do `.env`, com `NODE_ENV=production`, segredos JWT fortes (32+ chars), `FRONTEND_URL` apontando para o domínio da Vercel e `API_PUBLIC_URL` para o domínio público da API.
 - Se usar WhatsApp real, configure `WHATSAPP_PROVIDER=evolution` e o webhook da Evolution para `https://<sua-api>/api/webhooks/evolution`.
 
-### Banco (Neon)
+### Banco
 
-- Use `DATABASE_URL` (pooled) e `DIRECT_URL` (direta) com `sslmode=require`.
-- Aplique migrations com `prisma migrate deploy` no deploy da API.
+- Preserve o arquivo SQLite em volume persistente.
+- O script de `start` aplica `prisma migrate deploy` automaticamente.
 
 ---
 
@@ -430,7 +394,7 @@ arcco/
 ├── apps/
 │   ├── api/                      # NestJS + Fastify + Prisma
 │   │   ├── prisma/
-│   │   │   ├── schema.prisma     # 14 modelos (multiempresa)
+│   │   │   ├── schema.prisma     # modelos locais multiempresa + eventos
 │   │   │   └── seed.ts           # dados de demonstração
 │   │   └── src/
 │   │       ├── main.ts           # bootstrap + OTEL + plugins Fastify

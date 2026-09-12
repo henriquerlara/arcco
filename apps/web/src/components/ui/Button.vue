@@ -2,18 +2,18 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 
 export const botaoVariantes = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-superficie disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-semibold transition-[color,background-color,border-color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-carvao/25 focus-visible:ring-offset-2 focus-visible:ring-offset-superficie disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
   {
     variants: {
       variante: {
         primario:
-          'bg-dourado text-preto hover:bg-dourado-hover shadow-suave font-semibold',
+          'border border-carvao bg-carvao text-marfim hover:bg-carvao-claro',
         secundario:
-          'bg-branco text-texto border border-borda hover:bg-marfim shadow-suave',
-        contorno: 'border border-borda bg-transparent text-texto hover:bg-marfim',
+          'bg-branco text-carvao border border-borda hover:border-dourado hover:bg-marfim',
+        contorno: 'border border-borda bg-transparent text-carvao hover:border-dourado hover:bg-marfim',
         fantasma: 'bg-transparent text-texto hover:bg-marfim',
-        perigo: 'bg-erro text-branco hover:brightness-95 shadow-suave',
-        link: 'text-dourado-hover underline-offset-4 hover:underline',
+        perigo: 'bg-erro text-branco hover:brightness-95',
+        link: 'text-carvao underline-offset-4 hover:text-dourado-hover hover:underline',
         escuro: 'bg-carvao-claro text-marfim hover:bg-carvao border border-white/5',
       },
       tamanho: {

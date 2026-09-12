@@ -76,6 +76,16 @@ export class OportunidadesController {
     });
   }
 
+  @Post(':id/ajuste-corrigido')
+  marcarAjusteCorrigido(
+    @EmpresaAtual() empresaId: string,
+    @UsuarioAtual() usuario: UsuarioAutenticado,
+    @Param('id') id: string,
+    @Body() corpo?: { ajusteId?: string },
+  ) {
+    return this.servico.marcarAjusteCorrigido(empresaId, id, usuario.id, corpo?.ajusteId);
+  }
+
   @Delete(':id')
   remover(@EmpresaAtual() empresaId: string, @Param('id') id: string) {
     return this.servico.remover(empresaId, id);

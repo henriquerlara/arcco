@@ -9,7 +9,7 @@ Visão técnica do sistema: estrutura do monorepo, decisões de projeto, isolame
 ARCCO é um monorepo pnpm com três pacotes:
 
 - **`apps/web`** — SPA Vue 3 (Vite). Camada de apresentação e interação.
-- **`apps/api`** — API NestJS sobre Fastify, com Prisma/PostgreSQL. Regras de negócio, persistência e integrações.
+- **`apps/api`** — API NestJS sobre Fastify, com Prisma/SQLite local. Regras de negócio, persistência e integrações.
 - **`packages/contratos`** — Zod schemas, tipos e enums compartilhados entre back e front.
 
 A comunicação web ↔ API é REST/JSON sob o prefixo `/api`, com autenticação por cookies httpOnly.
@@ -43,6 +43,7 @@ src/
     ├── categorias/         # /categorias
     ├── funil/              # /funil/etapas
     ├── oportunidades/      # /oportunidades
+    ├── eventos/            # timeline imutável + próxima ação derivada
     ├── atividades/         # /atividades
     ├── campos-personalizados/  # /campos-personalizados
     ├── dashboard/          # /dashboard
@@ -83,7 +84,8 @@ Fonte única de verdade dos contratos: enums (perfis, status, intenções), sche
 - **Monorepo pnpm com workspaces** — compartilha `@arcco/contratos` sem publicar em registry; um único `pnpm install`.
 - **Contratos compartilhados (Zod)** — os mesmos schemas validam a entrada na API e alimentam formulários/tipos no front, eliminando divergência de contrato.
 - **NestJS sobre Fastify** — organização modular (DI, guards, pipes) com o desempenho do Fastify; plugins de cookie, cors, helmet e multipart registrados no bootstrap.
-- **Prisma + PostgreSQL** — modelos em português (PascalCase) mapeados para tabelas `snake_case` (`@@map`). JSONB para dados flexíveis (configurações, campos personalizados, estado do bot).
+- **Prisma + SQLite local** — inicialização automática por migrations, arquivo persistente no dispositivo e modelos em português mapeados para tabelas `snake_case`.
+- **Timeline orientada a eventos** — ações reais registram eventos imutáveis; o funil e a próxima ação são consequências do trabalho, não manutenção paralela.
 - **Multi-tenant por coluna `empresaId`** — simplicidade operacional (um banco, um schema) com isolamento aplicado na camada de serviço e reforçado por índices/uniques compostos.
 - **Autenticação stateless com cookies httpOnly** — access token curto + refresh token, com `versaoSessao` para invalidação.
 - **Guards globais** — `AuthGuard` e `PerfilGuard` aplicados a toda a API; rotas liberadas explicitamente com `@Publico()`.
@@ -136,7 +138,7 @@ Fonte única de verdade dos contratos: enums (perfis, status, intenções), sche
 ┌──────────────┐   REST /api    ┌───────────────────────────────────────────┐
 │  apps/web    │ ─────────────▶ │                apps/api (NestJS/Fastify)   │
 │  Vue 3 SPA   │ ◀───────────── │                                             │
-│  (Vercel)    │  cookies JWT   │  Guards: AuthGuard + PerfilGuard             │
+│  responsivo  │  cookies JWT   │  Guards: AuthGuard + PerfilGuard             │
 └──────┬───────┘                │  Módulos: auth, crm, conversas, chatbot...   │
        │                        │                                             │
        │ importa                │   ┌────────────┐   ┌────────────┐            │
@@ -150,13 +152,13 @@ Fonte única de verdade dos contratos: enums (perfis, status, intenções), sche
                                                     │
                                                     ▼
                                          ┌────────────────────┐
-                                         │  PostgreSQL         │
-                                         │  (Docker / Neon)    │
+                                         │  SQLite local       │
+                                         │  arcco.db           │
                                          └────────────────────┘
 
                           OpenTelemetry  ──▶  coletor OTLP (opcional)
 ```
 
-Fluxo resumido: o cliente fala pelo WhatsApp → webhook chega na API → chatbot faz a triagem e cria oportunidades → atendente/gestor operam pelo SPA → tudo persistido no PostgreSQL, isolado por `empresaId`.
+Fluxo resumido: o cliente fala pelo WhatsApp → webhook chega na API → chatbot faz a triagem e cria oportunidades → ações geram eventos e atualizam o processo → tudo é persistido no SQLite local, isolado por `empresaId`.
 
 Para o modelo de dados detalhado, veja [`BANCO_DE_DADOS.md`](BANCO_DE_DADOS.md).

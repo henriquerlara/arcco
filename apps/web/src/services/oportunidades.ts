@@ -36,6 +36,11 @@ export const servicoOportunidades = {
       await http.post(`/oportunidades/${id}/mover`, { etapaId, motivoPerda }),
     );
   },
+  async marcarAjusteCorrigido(id: string, ajusteId?: string): Promise<Oportunidade> {
+    return desembrulhar<Oportunidade>(
+      await http.post(`/oportunidades/${id}/ajuste-corrigido`, ajusteId ? { ajusteId } : {}),
+    );
+  },
   excluir(id: string): Promise<void> {
     return http.delete(`/oportunidades/${id}`);
   },

@@ -30,7 +30,7 @@ export const criarContatoSchema = z.object({
 export const atualizarContatoSchema = criarContatoSchema.partial();
 
 export const criarObraSchema = z.object({
-  nome: z.string().min(2, 'Informe o nome da obra'),
+  nome: z.string().trim().optional(),
   identificacao: z.string().optional(),
   tipo: z.string().optional(),
   status: z.nativeEnum(StatusObra).default(StatusObra.PLANEJAMENTO),
@@ -83,7 +83,7 @@ export const excluirEtapaSchema = z.object({
 });
 
 export const criarOportunidadeSchema = z.object({
-  titulo: z.string().min(2),
+  titulo: z.string().trim().min(2).optional(),
   contatoId: z.string().uuid(),
   obraId: z.string().uuid().optional().nullable(),
   categoriaId: z.string().uuid().optional().nullable(),
@@ -107,6 +107,76 @@ export const atualizarOportunidadeSchema = criarOportunidadeSchema.partial().ext
 export const moverOportunidadeSchema = z.object({
   etapaId: z.string().uuid(),
   motivoPerda: z.string().optional(),
+});
+
+export const enviarOrcamentoSchema = z.object({
+  texto: z.string().min(1, 'Informe o texto do orçamento'),
+  orcamentoId: z.string().uuid().optional(),
+  valorEstimado: z.number().nonnegative().optional(),
+  arquivoId: z.string().uuid().optional().nullable(),
+});
+
+export const itemOrcamentoInputSchema = z.object({
+  produtoId: z.string().uuid().optional().nullable(),
+  nome: z.string().min(1),
+  unidade: z.string().min(1).default('un'),
+  quantidade: z.number().positive(),
+  precoUnitario: z.number().nonnegative(),
+  desconto: z.number().nonnegative().default(0),
+});
+
+export const criarProdutoSchema = z.object({
+  sku: z.string().optional().nullable(),
+  nome: z.string().min(2),
+  descricao: z.string().optional().nullable(),
+  unidade: z.string().min(1).default('un'),
+  precoVenda: z.number().nonnegative().default(0),
+  /** Só na criação — vira a primeira movimentação ENTRADA. */
+  saldoInicial: z.number().nonnegative().default(0),
+  estoqueMinimo: z.number().nonnegative().default(0),
+  controlaEstoque: z.boolean().default(true),
+  ativo: z.boolean().default(true),
+});
+
+export const atualizarProdutoSchema = z.object({
+  sku: z.string().optional().nullable(),
+  nome: z.string().min(2).optional(),
+  descricao: z.string().optional().nullable(),
+  unidade: z.string().min(1).optional(),
+  precoVenda: z.number().nonnegative().optional(),
+  estoqueMinimo: z.number().nonnegative().optional(),
+  controlaEstoque: z.boolean().optional(),
+  ativo: z.boolean().optional(),
+});
+
+export const entradaEstoqueSchema = z.object({
+  quantidade: z.number().positive(),
+  observacao: z.string().optional(),
+});
+
+/** Ajuste de inventário: informa o saldo contado; o sistema calcula a diferença. */
+export const ajusteEstoqueSchema = z.object({
+  saldoContado: z.number(),
+  observacao: z.string().min(2, 'Informe o motivo do ajuste'),
+});
+
+export const criarOrcamentoSchema = z.object({
+  oportunidadeId: z.string().uuid(),
+  observacoes: z.string().optional().nullable(),
+  descontoValor: z.number().nonnegative().default(0),
+  validadeEm: z.coerce.date().optional().nullable(),
+  itens: z.array(itemOrcamentoInputSchema).min(1, 'Inclua ao menos um item'),
+});
+
+export const atualizarOrcamentoSchema = z.object({
+  observacoes: z.string().optional().nullable(),
+  descontoValor: z.number().nonnegative().optional(),
+  validadeEm: z.coerce.date().optional().nullable(),
+  itens: z.array(itemOrcamentoInputSchema).min(1).optional(),
+});
+
+export const enviarOrcamentoEstruturadoSchema = z.object({
+  texto: z.string().min(1, 'Informe o texto do orçamento'),
 });
 
 export const criarAtividadeSchema = z
@@ -164,6 +234,8 @@ export const estadoBotSchema = z.object({
   dadosColetados: z.record(z.unknown()).optional().default({}),
   ultimaPergunta: z.string().optional(),
   tentativas: z.number().int().default(0),
+  /** Resumo textual da triagem para o atendente humano */
+  resumo: z.string().optional(),
   /** JID WhatsApp para envio (@lid preferencial) — não faz parte do fluxo do bot */
   jidEnvio: z.string().optional(),
 });

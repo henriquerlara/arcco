@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { useQuery, useQueryClient } from '@tanstack/vue-query';
+import { useQuery } from '@tanstack/vue-query';
 import { Filter } from 'lucide-vue-next';
 import CabecalhoPagina from '@/components/layout/CabecalhoPagina.vue';
 import EstadoErro from '@/components/compartilhados/EstadoErro.vue';
@@ -11,12 +11,9 @@ import SeletorCategoria from '@/components/formularios/SeletorCategoria.vue';
 import Button from '@/components/ui/Button.vue';
 import ColunaPipeline from './ColunaPipeline.vue';
 import { servicoOportunidades, type ColunaPipeline as TColuna } from '@/services';
-import { useNotificacao } from '@/composables/useNotificacao';
 import { formatarMoeda } from '@/composables/formatadores';
 
 const router = useRouter();
-const queryClient = useQueryClient();
-const { notificarErro, sucesso } = useNotificacao();
 
 const responsavelId = ref<string | null>(null);
 const categoriaId = ref<string | null>(null);
@@ -51,23 +48,21 @@ function abrir(id: string) {
   void router.push({ name: 'oportunidade-detalhe', params: { id } });
 }
 
-async function mover({ oportunidadeId, etapaId }: { oportunidadeId: string; etapaId: string }) {
-  try {
-    await servicoOportunidades.mover(oportunidadeId, etapaId);
-    sucesso('Oportunidade movida.');
-    await queryClient.invalidateQueries({ queryKey: ['pipeline'] });
-  } catch (e) {
-    notificarErro(e, 'Não foi possível mover a oportunidade.');
-    await refetch();
-  }
+function abrirParaOrcamento(id: string) {
+  void router.push({
+    name: 'oportunidade-detalhe',
+    params: { id },
+    query: { enviarOrcamento: '1' },
+  });
 }
+
 </script>
 
 <template>
   <div class="flex h-full flex-col gap-5">
     <CabecalhoPagina
       titulo="Pipeline"
-      :descricao="`Arraste os cartões entre as etapas · ${formatarMoeda(valorTotal)} em jogo`"
+      :descricao="`Progresso atualizado pelas ações do time · ${formatarMoeda(valorTotal)} em jogo`"
     >
       <template #acoes>
         <Button variante="secundario" @click="filtrosVisiveis = !filtrosVisiveis">
@@ -93,18 +88,18 @@ async function mover({ oportunidadeId, etapaId }: { oportunidadeId: string; etap
 
     <EstadoErro v-if="isError" :erro="error" @tentar-novamente="refetch()" />
 
-    <div v-else-if="isLoading" class="flex gap-4 overflow-x-auto pb-4">
-      <Skeleton v-for="n in 5" :key="n" class="h-96 w-72 shrink-0" />
+    <div v-else-if="isLoading" class="flex min-h-0 flex-1 gap-3">
+      <Skeleton v-for="n in 4" :key="n" class="h-96 min-w-0 flex-1 basis-0" />
     </div>
 
-    <div v-else class="flex flex-1 gap-4 overflow-x-auto pb-4">
+    <div v-else class="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-1">
       <ColunaPipeline
         v-for="coluna in colunas"
         :key="coluna.etapa.id"
         :etapa="coluna.etapa"
         :oportunidades="coluna.oportunidades"
         @abrir="abrir"
-        @mover="mover"
+        @enviar-orcamento="abrirParaOrcamento"
       />
     </div>
   </div>

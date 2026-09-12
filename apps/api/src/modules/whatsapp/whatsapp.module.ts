@@ -11,9 +11,16 @@ import { ConversasModule } from '../conversas/conversas.module';
 import { MensagensModule } from '../mensagens/mensagens.module';
 import { ChatbotModule } from '../chatbot/chatbot.module';
 import { OportunidadesModule } from '../oportunidades/oportunidades.module';
+import { ArquivosModule } from '../arquivos/arquivos.module';
 
 @Module({
-  imports: [ConversasModule, MensagensModule, ChatbotModule, OportunidadesModule],
+  imports: [
+    ConversasModule,
+    MensagensModule,
+    ChatbotModule,
+    OportunidadesModule,
+    ArquivosModule,
+  ],
   controllers: [WhatsAppController, WebhookController],
   providers: [
     WhatsAppService,

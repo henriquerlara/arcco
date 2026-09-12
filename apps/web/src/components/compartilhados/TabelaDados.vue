@@ -26,16 +26,16 @@ function alinhar(col: ColunaTabela): string {
 </script>
 
 <template>
-  <div class="overflow-hidden rounded-lg border border-borda bg-card shadow-cartao">
+  <div class="overflow-hidden rounded-md border border-borda bg-branco">
     <div class="overflow-x-auto">
       <table class="w-full border-collapse text-sm">
         <thead>
-          <tr class="border-b border-borda bg-marfim/60">
+          <tr class="border-b border-borda bg-marfim/75">
             <th
               v-for="col in colunas"
               :key="col.chave"
               :class="[
-                'px-4 py-3 text-xs font-semibold uppercase tracking-wide text-texto-secundario',
+                'px-4 py-3.5 text-[10px] font-bold uppercase tracking-[0.14em] text-texto-secundario',
                 alinhar(col),
                 col.class,
               ]"
@@ -63,7 +63,7 @@ function alinhar(col: ColunaTabela): string {
               :key="linha.id"
               :class="[
                 'border-b border-borda transition-colors last:border-0',
-                clicavel ? 'cursor-pointer hover:bg-marfim/50' : 'hover:bg-marfim/30',
+                clicavel ? 'cursor-pointer hover:bg-marfim/65' : 'hover:bg-marfim/35',
               ]"
               @click="clicavel && emit('linha-clique', linha)"
             >

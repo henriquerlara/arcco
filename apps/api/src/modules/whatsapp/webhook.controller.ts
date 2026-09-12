@@ -3,6 +3,7 @@ import { carregarEnv } from '../../config/env';
 import { Publico } from '../../common/decorators/publico.decorator';
 import { Erros } from '../../common/erros/erros';
 import { WhatsAppService } from './whatsapp.service';
+import { extrairMidia, textoOuNomeArquivo } from './midia-evolution';
 
 interface PayloadEvolution {
   event?: string;
@@ -92,8 +93,10 @@ export class WebhookController {
       return null;
     }
 
-    const texto = extrairTexto(item.message as Record<string, unknown> | undefined);
-    if (!texto.trim()) {
+    const message = item.message as Record<string, unknown> | undefined;
+    const midia = extrairMidia(message);
+    const texto = textoOuNomeArquivo(message);
+    if (!texto.trim() && !midia) {
       return null;
     }
 
@@ -105,7 +108,7 @@ export class WebhookController {
     const destinoEnvio = chave.remoteJid.endsWith('@lid') ? chave.remoteJid : telefone;
 
     this.logger.log(
-      `Mensagem recebida instancia=${instancia} de=${telefone.slice(0, 6)}*** destino=${destinoEnvio}`,
+      `Mensagem recebida instancia=${instancia} de=${telefone.slice(0, 6)}*** destino=${destinoEnvio}${midia ? ` arquivo=${midia.nome}` : ''}`,
     );
 
     return this.servico.processarMensagemRecebida({
@@ -113,9 +116,18 @@ export class WebhookController {
       telefone,
       destinoEnvio,
       nome: typeof item.pushName === 'string' ? item.pushName : undefined,
-      texto,
+      texto: texto || midia?.nome || '',
       idExterno: chave.id ?? null,
       recebidoEm: timestampMensagem(item),
+      midia: midia
+        ? {
+            tipo: midia.tipo,
+            nome: midia.nome,
+            mime: midia.mime,
+            caption: midia.caption,
+            itemEvo: item,
+          }
+        : undefined,
     });
   }
 }
@@ -171,49 +183,4 @@ function extrairTelefonePacelia(
   if (digitos.length >= 12 && digitos.startsWith('55')) return digitos;
   if (digitos.length >= 10 && digitos.length <= 11) return `55${digitos}`;
   return digitos;
-}
-
-function extrairTexto(message?: Record<string, unknown>): string {
-  if (!message) return '';
-
-  const list = message.listResponseMessage as
-    | { singleSelectReply?: { selectedRowId?: string; selectedId?: string }; title?: string }
-    | undefined;
-  if (list?.singleSelectReply?.selectedRowId) return list.singleSelectReply.selectedRowId;
-  if (list?.singleSelectReply?.selectedId) return list.singleSelectReply.selectedId;
-  if (list?.title) return list.title;
-
-  const buttons = message.buttonsResponseMessage as {
-    selectedButtonId?: string;
-    selectedDisplayText?: string;
-  } | undefined;
-  if (buttons?.selectedButtonId) return buttons.selectedButtonId;
-  if (buttons?.selectedDisplayText) return buttons.selectedDisplayText;
-
-  const template = message.templateButtonReplyMessage as
-    | { selectedId?: string; selectedDisplayText?: string }
-    | undefined;
-  if (template?.selectedId) return template.selectedId;
-  if (template?.selectedDisplayText) return template.selectedDisplayText;
-
-  if (typeof message.conversation === 'string') return message.conversation;
-
-  const extended = message.extendedTextMessage as { text?: string } | undefined;
-  if (extended?.text) return extended.text;
-
-  const ephemeral = message.ephemeralMessage as { message?: Record<string, unknown> } | undefined;
-  if (ephemeral?.message) return extrairTexto(ephemeral.message);
-
-  const viewOnce = message.viewOnceMessage as { message?: Record<string, unknown> } | undefined;
-  if (viewOnce?.message) return extrairTexto(viewOnce.message);
-
-  const viewOnceV2 = message.viewOnceMessageV2 as { message?: Record<string, unknown> } | undefined;
-  if (viewOnceV2?.message) return extrairTexto(viewOnceV2.message);
-
-  const image = message.imageMessage as { caption?: string } | undefined;
-  if (image?.caption) return image.caption;
-  const doc = message.documentMessage as { caption?: string } | undefined;
-  if (doc?.caption) return doc.caption;
-
-  return '';
 }

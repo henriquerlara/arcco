@@ -28,9 +28,9 @@ export class ObrasService {
     const where: Prisma.ObraWhereInput = { empresaId };
     if (query.busca) {
       where.OR = [
-        { nome: { contains: query.busca, mode: 'insensitive' } },
-        { identificacao: { contains: query.busca, mode: 'insensitive' } },
-        { cidade: { contains: query.busca, mode: 'insensitive' } },
+        { nome: { contains: query.busca } },
+        { identificacao: { contains: query.busca } },
+        { cidade: { contains: query.busca } },
       ];
     }
 
@@ -66,7 +66,7 @@ export class ObrasService {
     return this.prisma.obra.create({
       data: {
         empresaId,
-        nome: dto.nome,
+        nome: this.inferirNome(dto),
         identificacao: dto.identificacao ?? null,
         tipo: dto.tipo ?? null,
         status: dto.status,
@@ -80,6 +80,15 @@ export class ObrasService {
         dadosPersonalizados: dadosPersonalizados as object,
       },
     });
+  }
+
+  private inferirNome(dto: CriarObraInput): string {
+    const informado = dto.nome?.trim();
+    if (informado) return informado;
+    const contexto = dto.identificacao?.trim() || dto.endereco?.trim();
+    if (contexto) return contexto;
+    const local = [dto.bairro?.trim(), dto.cidade?.trim()].filter(Boolean).join(' · ');
+    return local || `Projeto de ${new Intl.DateTimeFormat('pt-BR').format(new Date())}`;
   }
 
   async atualizar(empresaId: string, id: string, dto: AtualizarObraInput) {

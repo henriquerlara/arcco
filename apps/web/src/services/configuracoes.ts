@@ -158,9 +158,8 @@ export const servicoWhatsApp = {
   },
   preferida(conexoes: ConexaoWhatsApp[]): ConexaoWhatsApp | undefined {
     return (
-      conexoes.find((c) => c.nomeInstancia === '553731800386') ??
-      conexoes.find((c) => c.provedor === 'EVOLUTION') ??
       conexoes.find((c) => c.status === StatusConexaoWhatsApp.CONECTADO) ??
+      conexoes.find((c) => c.provedor === 'EVOLUTION') ??
       conexoes[0]
     );
   },
@@ -179,9 +178,10 @@ export const servicoWhatsApp = {
   },
   async conectar(): Promise<StatusWhatsApp> {
     const conexoes = await servicoWhatsApp.listarConexoes();
-    const conexao =
-      servicoWhatsApp.preferida(conexoes) ??
-      (await servicoWhatsApp.criarConexao('553731800386', '553731800386'));
+    const conexao = servicoWhatsApp.preferida(conexoes);
+    if (!conexao) {
+      throw new Error('Nenhuma conexão WhatsApp cadastrada. Crie uma conexão nas configurações.');
+    }
     const atualizada = desembrulhar<ConexaoWhatsApp>(
       await http.post(`/whatsapp/conexoes/${conexao.id}/conectar`),
     );

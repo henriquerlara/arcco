@@ -39,14 +39,30 @@ export const servicoConversas = {
   /** Não há endpoint dedicado: o contexto é derivado do detalhe da conversa. */
   async contexto(id: string): Promise<ContextoComercial> {
     const conversa = await this.obter(id);
+    const coletados = conversa.estadoBot?.dadosColetados ?? {};
+    const dadosColetados = Object.fromEntries(
+      Object.entries(coletados).filter(([chave]) => !chave.startsWith('_')),
+    );
     return {
       contato: conversa.contato ?? null,
+      oportunidade: conversa.oportunidade ?? null,
+      resumo: conversa.estadoBot?.resumo ?? null,
+      dadosColetados,
     };
   },
   /** Envio manual do atendente via WhatsApp. */
   async enviar(id: string, texto: string): Promise<Mensagem> {
     return desembrulhar<Mensagem>(
       await http.post(`/whatsapp/conversas/${id}/enviar`, { texto }),
+    );
+  },
+  /** Envia orçamento e avança a oportunidade para Negociação. */
+  async enviarOrcamento(
+    oportunidadeId: string,
+    dados: { texto: string; valorEstimado: number; arquivoId?: string },
+  ): Promise<{ mensagem: Mensagem; oportunidadeId: string; conversaId: string }> {
+    return desembrulhar(
+      await http.post(`/whatsapp/oportunidades/${oportunidadeId}/enviar-orcamento`, dados),
     );
   },
   async assumir(id: string): Promise<Conversa> {

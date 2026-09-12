@@ -120,38 +120,38 @@ async function salvar() {
     <form class="space-y-4" @submit.prevent="salvar">
       <div class="grid gap-4 sm:grid-cols-2">
         <div class="space-y-1.5">
-          <Label obrigatorio>Nome</Label>
-          <Input v-model="form.nome" :invalido="!!erros.nome" />
+          <Label for="contato-nome" obrigatorio>Nome</Label>
+          <Input id="contato-nome" v-model="form.nome" :invalido="!!erros.nome" autocomplete="name" />
           <p v-if="erros.nome" class="text-xs text-erro">{{ erros.nome }}</p>
         </div>
         <div class="space-y-1.5">
-          <Label obrigatorio>Telefone</Label>
-          <Input v-model="form.telefone" placeholder="(11) 90000-0000" :invalido="!!erros.telefone" />
+          <Label for="contato-telefone" obrigatorio>Telefone</Label>
+          <Input id="contato-telefone" v-model="form.telefone" placeholder="(11) 90000-0000" :invalido="!!erros.telefone" autocomplete="tel" />
           <p v-if="erros.telefone" class="text-xs text-erro">{{ erros.telefone }}</p>
         </div>
         <div class="space-y-1.5">
-          <Label>E-mail</Label>
-          <Input v-model="form.email" type="email" />
+          <Label for="contato-email">E-mail</Label>
+          <Input id="contato-email" v-model="form.email" type="email" autocomplete="email" />
         </div>
         <div class="space-y-1.5">
-          <Label>Tipo</Label>
-          <Select v-model="form.tipo" :opcoes="opcoesTipo" />
+          <Label for="contato-tipo">Tipo</Label>
+          <Select id="contato-tipo" v-model="form.tipo" :opcoes="opcoesTipo" />
         </div>
         <div class="space-y-1.5">
-          <Label>Empresa</Label>
-          <Input v-model="form.empresaNome" />
+          <Label for="contato-empresa">Empresa</Label>
+          <Input id="contato-empresa" v-model="form.empresaNome" autocomplete="organization" />
         </div>
         <div class="space-y-1.5">
-          <Label>Origem</Label>
-          <Input v-model="form.origem" placeholder="WhatsApp, indicação…" />
+          <Label for="contato-origem">Origem</Label>
+          <Input id="contato-origem" v-model="form.origem" placeholder="WhatsApp, indicação…" />
         </div>
         <div class="space-y-1.5 sm:col-span-2">
           <Label>Responsável</Label>
           <SeletorUsuario v-model="form.responsavelId" incluir-vazio rotulo-vazio="Sem responsável" />
         </div>
         <div class="space-y-1.5 sm:col-span-2">
-          <Label>Observações</Label>
-          <Textarea v-model="form.observacoes" />
+          <Label for="contato-observacoes">Observações</Label>
+          <Textarea id="contato-observacoes" v-model="form.observacoes" />
         </div>
       </div>
 

@@ -12,16 +12,14 @@ import { test, expect, type Page } from '@playwright/test';
  */
 
 const API_URL = process.env.VITE_API_URL ?? 'http://localhost:3000';
-const EMAIL = process.env.E2E_EMAIL ?? 'proprietario@arcco.dev';
-const SENHA = process.env.E2E_SENHA ?? 'arcco12345';
+const EMAIL = process.env.E2E_EMAIL ?? 'proprietario.iluminacao@demo.arcco.local';
+const SENHA = process.env.E2E_SENHA ?? 'Arcco@123';
 
 async function apiDisponivel(): Promise<boolean> {
   try {
     const controlador = new AbortController();
     const t = setTimeout(() => controlador.abort(), 2000);
-    const resposta = await fetch(`${API_URL}/health`, { signal: controlador.signal }).catch(
-      () => fetch(`${API_URL}/auth/sessao`, { signal: controlador.signal }),
-    );
+    const resposta = await fetch(`${API_URL}/api/autenticacao/eu`, { signal: controlador.signal });
     clearTimeout(t);
     return !!resposta;
   } catch {
@@ -33,7 +31,7 @@ async function entrar(page: Page) {
   await page.goto('/entrar');
   await page.getByLabel('E-mail').fill(EMAIL);
   await page.getByLabel('Senha').fill(SENHA);
-  await page.getByRole('button', { name: 'Entrar' }).click();
+  await page.getByRole('button', { name: 'Acessar minha operação' }).click();
   await page.waitForURL(/\/app\//, { timeout: 15_000 });
 }
 
@@ -42,13 +40,25 @@ test.describe('Telas públicas (sem API)', () => {
     await page.goto('/entrar');
     await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
     await expect(page.getByLabel('E-mail')).toBeVisible();
-    await expect(page.getByLabel('Senha')).toBeVisible();
-    await expect(page.getByText('ARCCO').first()).toBeVisible();
+    await expect(page.locator('#senha')).toBeVisible();
+    await expect(page.getByRole('img', { name: /ARCCO/ }).first()).toBeVisible();
+    await expect(page.getByText('Da mensagem à próxima ação')).toBeVisible();
+    await expect(page.locator('main')).toHaveCSS('height', `${page.viewportSize()!.height}px`);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight),
+    ).toBe(true);
+    const preview = await page.locator('.auth-preview').boundingBox();
+    const rodape = await page.locator('main footer').boundingBox();
+    expect(preview).not.toBeNull();
+    expect(rodape).not.toBeNull();
+    expect(preview!.y + preview!.height).toBeLessThan(rodape!.y);
+    await page.getByRole('button', { name: 'Mostrar senha' }).click();
+    await expect(page.locator('#senha')).toHaveAttribute('type', 'text');
   });
 
   test('valida credenciais obrigatórias', async ({ page }) => {
     await page.goto('/entrar');
-    await page.getByRole('button', { name: 'Entrar' }).click();
+    await page.getByRole('button', { name: 'Acessar minha operação' }).click();
     await expect(page.getByText('E-mail inválido')).toBeVisible();
   });
 
@@ -66,6 +76,8 @@ test.describe('Telas públicas (sem API)', () => {
 });
 
 test.describe('Fluxo autenticado (requer API)', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async () => {
     test.skip(!(await apiDisponivel()), 'API indisponível em VITE_API_URL — pulando fluxo autenticado.');
   });
@@ -77,15 +89,22 @@ test.describe('Fluxo autenticado (requer API)', () => {
 
   test('navega pelas seções principais', async ({ page }) => {
     await entrar(page);
-    await page.getByRole('link', { name: 'Pipeline' }).click();
+    await page.getByRole('link', { name: 'Negócios' }).click();
     await expect(page).toHaveURL(/\/app\/pipeline/);
     await expect(page.getByRole('heading', { name: 'Pipeline' })).toBeVisible();
 
-    await page.getByRole('link', { name: 'Contatos' }).click();
+    await page.getByRole('link', { name: 'Pessoas' }).click();
     await expect(page).toHaveURL(/\/app\/contatos/);
 
     await page.getByRole('link', { name: 'Conversas' }).click();
     await expect(page).toHaveURL(/\/app\/conversas/);
+  });
+
+  test('pipeline começa vazio sem dados de seed', async ({ page }) => {
+    await entrar(page);
+    await page.goto('/app/pipeline');
+    await expect(page.getByRole('heading', { name: 'Pipeline' })).toBeVisible();
+    await expect(page.locator('main article[role="link"]')).toHaveCount(0);
   });
 
   test('cria um contato', async ({ page }) => {
@@ -94,7 +113,7 @@ test.describe('Fluxo autenticado (requer API)', () => {
     await page.getByRole('button', { name: 'Novo contato' }).first().click();
     const nome = `Contato E2E ${Date.now()}`;
     await page.getByLabel('Nome').fill(nome);
-    await page.getByLabel('Telefone').fill('11988887777');
+    await page.getByLabel('Telefone').fill(`11${String(Date.now()).slice(-9)}`);
     await page.getByRole('button', { name: 'Salvar' }).click();
     await expect(page.getByText(nome)).toBeVisible({ timeout: 10_000 });
   });

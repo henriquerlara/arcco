@@ -101,7 +101,7 @@ export class CamposPersonalizadosService {
       rotulo: c.rotulo,
       tipo: c.tipo,
       obrigatorio: c.obrigatorio,
-      opcoes: c.opcoes,
+      opcoes: Array.isArray(c.opcoes) ? c.opcoes.filter((o): o is string => typeof o === 'string') : [],
       ativo: c.ativo,
     }));
   }

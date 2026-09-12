@@ -32,8 +32,8 @@ const emit = defineEmits<{ (e: 'selecionar', id: string): void }>();
       :key="conversa.id"
       :class="
         cn(
-          'flex w-full items-start gap-3 p-3 text-left transition-colors hover:bg-marfim/60',
-          selecionadaId === conversa.id && 'bg-marfim',
+          'relative flex w-full items-start gap-3 p-3.5 text-left transition-colors hover:bg-marfim/60',
+          selecionadaId === conversa.id && 'bg-marfim before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:bg-carvao',
         )
       "
       @click="emit('selecionar', conversa.id)"
@@ -62,7 +62,7 @@ const emit = defineEmits<{ (e: 'selecionar', id: string): void }>();
           </span>
         </div>
         <p class="mt-0.5 truncate text-xs text-texto-secundario">
-          {{ conversa.ultimaMensagem ?? 'Sem mensagens' }}
+          {{ conversa.ultimaMensagem ?? conversa.ultimaMensagemPreview ?? 'Sem mensagens' }}
         </p>
         <div class="mt-1.5 flex items-center gap-1.5">
           <BadgeStatus familia="statusConversa" :valor="conversa.status" />

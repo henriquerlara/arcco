@@ -1,35 +1,35 @@
 :root {
-  /* Neutros escuros */
-  --arcco-preto: #0a0a09;
-  --arcco-carvao: #151513;
-  --arcco-carvao-claro: #22211e;
+  /* Estrutura — verde-petróleo extraído da marca */
+  --arcco-preto: #082f34;
+  --arcco-carvao: #073b42;
+  --arcco-carvao-claro: #0d4a51;
 
-  /* Dourado da marca */
-  --arcco-dourado: #c7a454;
-  --arcco-dourado-hover: #ae8c3e;
-  --arcco-dourado-claro: #e4cc8b;
+  /* Metal fosco da marca */
+  --arcco-dourado: #b8aa97;
+  --arcco-dourado-hover: #8b7b66;
+  --arcco-dourado-claro: #d9cec0;
 
   /* Claros quentes */
-  --arcco-marfim: #f4f1e9;
-  --arcco-superficie: #fbfaf7;
-  --arcco-branco: #ffffff;
+  --arcco-marfim: #f1ede4;
+  --arcco-superficie: #f7f4ed;
+  --arcco-branco: #fffdf9;
 
   /* Texto */
-  --arcco-texto: #1a1917;
-  --arcco-texto-secundario: #6f6a61;
+  --arcco-texto: #12383b;
+  --arcco-texto-secundario: #687473;
 
   /* Bordas */
-  --arcco-borda: #ddd8ce;
+  --arcco-borda: #d8d2c7;
 
   /* Semânticos */
-  --arcco-sucesso: #3f8463;
-  --arcco-alerta: #b9822f;
-  --arcco-erro: #b65353;
-  --arcco-info: #4c7187;
+  --arcco-sucesso: #39785e;
+  --arcco-alerta: #9b6d32;
+  --arcco-erro: #a84945;
+  --arcco-info: #3f6e76;
 
-  /* Raio e sombra padrão */
-  --arcco-raio: 10px;
-  --arcco-sombra-cartao: 0 1px 2px rgba(10, 10, 9, 0.04), 0 4px 12px rgba(10, 10, 9, 0.05);
+  /* Raio — overlays (dialog/menu) usam sombra; cards ficam planos */
+  --arcco-raio: 6px;
+  --arcco-sombra-overlay: 0 18px 45px rgba(8, 47, 52, 0.15);
 
   color-scheme: light;
 }

@@ -25,6 +25,7 @@ export class EmpresasService {
         telefone: dto.telefone,
         cidade: dto.cidade,
         estado: dto.estado,
+        logoArquivoId: dto.logoArquivoId,
       },
     });
   }

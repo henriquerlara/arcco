@@ -76,6 +76,10 @@ function novaAtividade() {
   atividadeEmEdicao.value = null;
   formAberto.value = true;
 }
+
+function contatoDaAtividade(ativ: Atividade) {
+  return ativ.contato ?? ativ.oportunidade?.contato ?? null;
+}
 </script>
 
 <template>
@@ -141,8 +145,16 @@ function novaAtividade() {
             >
               <CalendarClock class="size-3.5" /> {{ formatarDataHora(ativ.vencimento) }}
             </span>
-            <span v-if="ativ.responsavel" class="flex items-center gap-1">
-              <User class="size-3.5" /> {{ ativ.responsavel.nome }}
+            <RouterLink
+              v-if="contatoDaAtividade(ativ)"
+              :to="`/app/contatos/${contatoDaAtividade(ativ)!.id}`"
+              class="flex items-center gap-1 hover:text-dourado-hover"
+              @click.stop
+            >
+              <User class="size-3.5" /> {{ contatoDaAtividade(ativ)!.nome }}
+            </RouterLink>
+            <span v-if="ativ.oportunidade" class="flex items-center gap-1">
+              <Target class="size-3.5" /> {{ ativ.oportunidade.codigo }}
             </span>
           </div>
         </button>

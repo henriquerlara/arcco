@@ -29,7 +29,7 @@ export class ConversasService {
     if (opcoes.modo) where.modo = opcoes.modo as ModoAtendimento;
     if (opcoes.busca) {
       where.OR = [
-        { nomeContato: { contains: opcoes.busca, mode: 'insensitive' } },
+        { nomeContato: { contains: opcoes.busca } },
         { telefoneNormalizado: { contains: normalizarTelefone(opcoes.busca) } },
       ];
     }
@@ -54,7 +54,13 @@ export class ConversasService {
       include: { contato: true },
     });
     if (!conversa) throw Erros.naoEncontrado('CONVERSA_NAO_ENCONTRADA', 'Conversa nao encontrada');
-    return conversa;
+    const oportunidade = conversa.oportunidadeId
+      ? await this.prisma.oportunidade.findFirst({
+          where: { id: conversa.oportunidadeId, empresaId },
+          include: { etapa: { select: { id: true, nome: true, tipo: true, chaveSistema: true } } },
+        })
+      : null;
+    return { ...conversa, oportunidade };
   }
 
   /**

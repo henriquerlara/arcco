@@ -3,7 +3,7 @@
 Frontend do MVP da **ARCCO** — inteligência comercial para empresas que atendem obras.
 
 Stack: **Vue 3 + Vite + TypeScript (strict)**, Tailwind CSS, Pinia, Vue Router,
-TanStack Query, radix-vue (primitivos estilo shadcn), vue-echarts e vue-draggable-plus.
+TanStack Query, radix-vue (primitivos estilo shadcn) e vue-echarts.
 Interface em Português (Brasil), com identidade visual de sidebar escura e área
 principal clara e quente.
 

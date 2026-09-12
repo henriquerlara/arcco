@@ -69,14 +69,10 @@ watch(
 
 async function salvar() {
   Object.keys(erros).forEach((k) => delete erros[k]);
-  if (form.nome.trim().length < 2) {
-    erros.nome = 'Informe o nome da obra';
-    return;
-  }
   salvando.value = true;
   try {
     const payload = {
-      nome: form.nome,
+      nome: form.nome.trim() || undefined,
       identificacao: form.identificacao || undefined,
       tipo: form.tipo || undefined,
       status: form.status as StatusObra,
@@ -106,15 +102,15 @@ async function salvar() {
 <template>
   <Dialog
     v-model="aberto"
-    :titulo="ehEdicao ? 'Editar obra' : 'Nova obra'"
-    descricao="Cadastre o empreendimento e sua localização."
+    :titulo="ehEdicao ? 'Editar projeto' : 'Novo projeto'"
+    descricao="Informe o essencial. O nome será criado automaticamente se ficar vazio."
     tamanho="lg"
   >
     <form class="space-y-4" @submit.prevent="salvar">
       <div class="grid gap-4 sm:grid-cols-2">
         <div class="space-y-1.5 sm:col-span-2">
-          <Label obrigatorio>Nome da obra</Label>
-          <Input v-model="form.nome" :invalido="!!erros.nome" />
+          <Label>Nome do projeto <span class="font-normal text-texto-secundario">(opcional)</span></Label>
+          <Input v-model="form.nome" :invalido="!!erros.nome" placeholder="Inferido pela identificação ou endereço" />
           <p v-if="erros.nome" class="text-xs text-erro">{{ erros.nome }}</p>
         </div>
         <div class="space-y-1.5">

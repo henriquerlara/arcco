@@ -55,7 +55,7 @@ const valorInterno = computed({
 
 const triggerClasses = computed(() =>
   cn(
-    'flex h-10 w-full items-center justify-between rounded-md border bg-branco px-3 py-2 text-sm text-texto shadow-suave transition-colors data-[placeholder]:text-texto-secundario/70 focus:outline-none focus:ring-2 focus:ring-ring focus:border-dourado disabled:cursor-not-allowed disabled:opacity-60',
+    'flex h-10 w-full items-center justify-between rounded-md border bg-branco px-3 py-2 text-sm text-texto transition-[border-color,background-color] data-[placeholder]:text-texto-secundario/60 focus:border-carvao focus:bg-white focus:outline-none focus:ring-2 focus:ring-carvao/10 disabled:cursor-not-allowed disabled:bg-marfim/60 disabled:opacity-60',
     props.invalido ? 'border-erro' : 'border-borda',
     props.class,
   ),
@@ -81,11 +81,11 @@ const triggerClasses = computed(() =>
             v-for="opcao in opcoesInternas"
             :key="opcao.valor"
             :value="opcao.valor"
-            class="relative flex cursor-pointer select-none items-center rounded-sm py-2 pl-8 pr-3 text-sm text-texto outline-none data-[highlighted]:bg-marfim data-[state=checked]:font-medium"
+            class="relative flex cursor-pointer select-none items-center rounded-sm py-2.5 pl-8 pr-3 text-sm text-texto outline-none data-[highlighted]:bg-marfim data-[state=checked]:font-semibold"
           >
             <span class="absolute left-2 flex size-4 items-center justify-center">
               <SelectItemIndicator>
-                <Check class="size-4 text-dourado-hover" />
+                <Check class="size-4 text-carvao" />
               </SelectItemIndicator>
             </span>
             <SelectItemText>{{ opcao.rotulo }}</SelectItemText>

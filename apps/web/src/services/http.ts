@@ -3,6 +3,10 @@ import type { ErroApi } from '@/types';
 const API_ORIGIN = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 const BASE_URL = `${API_ORIGIN.replace(/\/$/, '')}/api`;
 
+export function urlApi(caminho: string): string {
+  return `${BASE_URL}${caminho}`;
+}
+
 export class ErroRequisicao extends Error {
   readonly codigo: string;
   readonly status: number;
@@ -45,6 +49,7 @@ function montarQuery(query?: Record<string, unknown>): string {
 export async function requisitar<T>(caminho: string, opcoes: OpcoesRequisicao = {}): Promise<T> {
   const { metodo = 'GET', corpo, query, sinal, headers } = opcoes;
   const url = `${BASE_URL}${caminho}${montarQuery(query)}`;
+  const ehFormData = typeof FormData !== 'undefined' && corpo instanceof FormData;
 
   let resposta: Response;
   try {
@@ -54,10 +59,10 @@ export async function requisitar<T>(caminho: string, opcoes: OpcoesRequisicao = 
       signal: sinal,
       headers: {
         Accept: 'application/json',
-        ...(corpo !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(corpo !== undefined && !ehFormData ? { 'Content-Type': 'application/json' } : {}),
         ...headers,
       },
-      body: corpo !== undefined ? JSON.stringify(corpo) : undefined,
+      body: corpo === undefined ? undefined : ehFormData ? (corpo as FormData) : JSON.stringify(corpo),
     });
   } catch (causa) {
     throw new ErroRequisicao(0, {

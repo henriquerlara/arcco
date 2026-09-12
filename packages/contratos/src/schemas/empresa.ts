@@ -22,6 +22,8 @@ export const chatbotConfigSchema = z.object({
   mensagemForaHorario: z.string().default(''),
   mensagemTransferencia: z.string().default(''),
   mensagemFinal: z.string().default(''),
+  /** Trecho configurável da pergunta de Novo Orçamento (ex.: "a lista de materiais"). */
+  textoPerguntaProjeto: z.string().default('a lista de materiais'),
 });
 
 export const configuracoesEmpresaSchema = z.object({
@@ -54,6 +56,7 @@ export const configuracoesEmpresaPadrao = (): ConfiguracoesEmpresa => ({
       'Vou transferir você para um de nossos atendentes. Em instantes alguém da equipe continuará por aqui.',
     mensagemFinal:
       'Obrigado! Sua solicitação foi registrada. Nossa equipe recebeu as informações e continuará o atendimento por aqui.',
+    textoPerguntaProjeto: 'a lista de materiais',
   },
   onboardingConcluido: false,
 });

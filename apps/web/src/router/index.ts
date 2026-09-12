@@ -54,6 +54,12 @@ const rotas: RouteRecordRaw[] = [
         meta: { titulo: 'Pipeline' },
       },
       {
+        path: 'agenda',
+        name: 'agenda',
+        component: () => import('@/modules/atividades/AtividadesView.vue'),
+        meta: { titulo: 'Agenda' },
+      },
+      {
         path: 'contatos',
         name: 'contatos',
         component: () => import('@/modules/contatos/ContatosView.vue'),
@@ -78,6 +84,24 @@ const rotas: RouteRecordRaw[] = [
         meta: { titulo: 'Obra' },
       },
       {
+        path: 'produtos',
+        name: 'produtos',
+        component: () => import('@/modules/produtos/ProdutosView.vue'),
+        meta: { titulo: 'Produtos' },
+      },
+      {
+        path: 'estoque',
+        name: 'estoque',
+        component: () => import('@/modules/estoque/EstoqueView.vue'),
+        meta: { titulo: 'Estoque' },
+      },
+      {
+        path: 'estoque/:id',
+        name: 'estoque-detalhe',
+        component: () => import('@/modules/estoque/EstoqueDetalheView.vue'),
+        meta: { titulo: 'Extrato de estoque' },
+      },
+      {
         path: 'oportunidades/:id',
         name: 'oportunidade-detalhe',
         component: () => import('@/modules/oportunidades/OportunidadeDetalheView.vue'),
@@ -92,6 +116,10 @@ const rotas: RouteRecordRaw[] = [
         name: 'config-empresa',
         component: () => import('@/modules/configuracoes/ConfigEmpresaView.vue'),
         meta: { titulo: 'Configurações · Empresa' },
+      },
+      {
+        path: 'configuracoes/produtos',
+        redirect: { name: 'produtos' },
       },
       {
         path: 'configuracoes/equipe',

@@ -16,14 +16,14 @@ defineProps<{
 
 <template>
   <div
-    class="rounded-lg border border-borda bg-card p-5 shadow-cartao transition-shadow hover:shadow-flutuante"
-    :class="destaque && 'ring-1 ring-dourado/40'"
+    class="superficie-arquitetonica group overflow-hidden rounded-md p-5"
+    :class="destaque && 'border-carvao bg-carvao text-marfim'"
   >
     <div class="flex items-start justify-between gap-3">
-      <p class="text-sm font-medium text-texto-secundario">{{ rotulo }}</p>
+      <p :class="['rotulo-editorial', destaque ? 'text-marfim/55' : 'text-texto-secundario']">{{ rotulo }}</p>
       <div
         v-if="icone"
-        class="flex size-9 items-center justify-center rounded-md bg-marfim text-dourado-hover"
+        :class="['flex size-9 items-center justify-center rounded-md', destaque ? 'bg-white/[0.07] text-dourado-claro' : 'bg-marfim text-carvao']"
       >
         <component :is="icone" class="size-5" />
       </div>
@@ -31,7 +31,7 @@ defineProps<{
 
     <div class="mt-3">
       <Skeleton v-if="carregando" class="h-8 w-28" />
-      <p v-else class="text-2xl font-semibold tracking-tight text-texto">{{ valor }}</p>
+      <p v-else :class="['fonte-marca text-[1.85rem] leading-none', destaque ? 'text-marfim' : 'text-texto']">{{ valor }}</p>
     </div>
 
     <div v-if="!carregando" class="mt-2 flex items-center gap-2 text-xs">
@@ -43,7 +43,7 @@ defineProps<{
         <component :is="variacao >= 0 ? TrendingUp : TrendingDown" class="size-3.5" />
         {{ Math.abs(variacao) }}%
       </span>
-      <span v-if="ajuda" class="text-texto-secundario">{{ ajuda }}</span>
+      <span v-if="ajuda" :class="destaque ? 'text-marfim/50' : 'text-texto-secundario'">{{ ajuda }}</span>
     </div>
   </div>
 </template>

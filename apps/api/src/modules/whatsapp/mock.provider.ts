@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { StatusConexaoWhatsApp } from '@arcco/contratos';
 import type {
   EnvioResultado,
+  MidiaParaEnvio,
   OpcoesEnvioTexto,
   ResultadoConexao,
   WhatsAppProvider,
@@ -25,6 +26,17 @@ export class MockWhatsAppProvider implements WhatsAppProvider {
   ): Promise<EnvioResultado> {
     this.logger.log(`[${nomeInstancia}] -> ${telefone}: ${texto}`);
     return { idExterno: `mock_${randomUUID()}`, status: 'ENVIADA' };
+  }
+
+  async enviarMidia(
+    nomeInstancia: string,
+    telefone: string,
+    midia: MidiaParaEnvio,
+  ): Promise<EnvioResultado> {
+    this.logger.log(
+      `[${nomeInstancia}] -> ${telefone}: arquivo ${midia.nome} (${midia.mime}, ${midia.buffer.length} bytes)`,
+    );
+    return { idExterno: `mock_file_${randomUUID()}`, status: 'ENVIADA' };
   }
 
   async conectar(): Promise<ResultadoConexao> {

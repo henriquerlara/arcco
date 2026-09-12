@@ -12,6 +12,7 @@ export const atualizarEmpresaSchema = z.object({
   telefone: z.string().optional().nullable(),
   cidade: z.string().optional().nullable(),
   estado: z.string().optional().nullable(),
+  logoArquivoId: z.string().uuid().optional().nullable(),
 });
 
 export const atualizarOnboardingSchema = z.object({

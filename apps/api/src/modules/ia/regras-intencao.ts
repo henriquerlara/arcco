@@ -19,6 +19,11 @@ const REGRAS: RegraIntencao[] = [
     ],
   },
   {
+    intencao: IntencaoChatbot.VENDAS,
+    peso: 0.95,
+    termos: [/\bvendas?\b/i, /\bcomercial\b/i],
+  },
+  {
     intencao: IntencaoChatbot.NOVO_ORCAMENTO,
     peso: 0.9,
     termos: [
@@ -56,6 +61,11 @@ const REGRAS: RegraIntencao[] = [
     intencao: IntencaoChatbot.FINANCEIRO,
     peso: 0.7,
     termos: [/\bboleto\b/i, /\bnota fiscal\b/i, /\bpagamento\b/i, /\bfinanceiro\b/i, /\bfatura\b/i],
+  },
+  {
+    intencao: IntencaoChatbot.SAC,
+    peso: 0.65,
+    termos: [/\bs\.?a\.?c\b/i, /\bp[oó]s[-\s]?venda\b/i],
   },
   {
     intencao: IntencaoChatbot.POS_VENDA,
@@ -108,12 +118,13 @@ export function classificarIntencaoRegras(texto: string): IntencaoIa {
   return { intencao: melhor.intencao, confianca: melhor.peso };
 }
 
-/** Interpreta uma escolha de menu numerico (1-4). */
+/** Interpreta escolha do menu principal Ecolume (1–5). */
 export function intencaoPorOpcaoMenu(texto: string): IntencaoChatbot | null {
   const t = texto.trim();
-  if (/^1\b/.test(t)) return IntencaoChatbot.NOVO_ORCAMENTO;
-  if (/^2\b/.test(t)) return IntencaoChatbot.ACOMPANHAR_SOLICITACAO;
-  if (/^3\b/.test(t)) return IntencaoChatbot.DUVIDA;
-  if (/^4\b/.test(t)) return IntencaoChatbot.FALAR_COM_PESSOA;
+  if (/^1\b/.test(t)) return IntencaoChatbot.VENDAS;
+  if (/^2\b/.test(t)) return IntencaoChatbot.FINANCEIRO;
+  if (/^3\b/.test(t)) return IntencaoChatbot.SAC;
+  if (/^4\b/.test(t)) return IntencaoChatbot.ENTREGA;
+  if (/^5\b/.test(t)) return IntencaoChatbot.OUTRO;
   return null;
 }

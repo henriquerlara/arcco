@@ -17,6 +17,9 @@
     "db:migrate": "pnpm --filter @arcco/api prisma:migrate",
     "db:seed": "pnpm --filter @arcco/api prisma:seed",
     "db:push": "pnpm --filter @arcco/api prisma:push",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f evolution-api",
     "format": "prettier --write \"**/*.{ts,vue,json,md}\""
   },
   "engines": {

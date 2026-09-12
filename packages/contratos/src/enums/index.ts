@@ -164,6 +164,7 @@ export const SegmentoEmpresa = {
 export type SegmentoEmpresa = (typeof SegmentoEmpresa)[keyof typeof SegmentoEmpresa];
 
 export const IntencaoChatbot = {
+  VENDAS: 'VENDAS',
   NOVO_ORCAMENTO: 'NOVO_ORCAMENTO',
   NEGOCIAR_ORCAMENTO: 'NEGOCIAR_ORCAMENTO',
   AJUSTAR_ORCAMENTO: 'AJUSTAR_ORCAMENTO',
@@ -171,11 +172,29 @@ export const IntencaoChatbot = {
   ACOMPANHAR_SOLICITACAO: 'ACOMPANHAR_SOLICITACAO',
   FINANCEIRO: 'FINANCEIRO',
   ENTREGA: 'ENTREGA',
+  SAC: 'SAC',
   POS_VENDA: 'POS_VENDA',
   FALAR_COM_PESSOA: 'FALAR_COM_PESSOA',
   OUTRO: 'OUTRO',
 } as const;
 export type IntencaoChatbot = (typeof IntencaoChatbot)[keyof typeof IntencaoChatbot];
+
+export const StatusOrcamento = {
+  RASCUNHO: 'RASCUNHO',
+  ENVIADO: 'ENVIADO',
+  ACEITO: 'ACEITO',
+  CANCELADO: 'CANCELADO',
+  CONVERTIDO: 'CONVERTIDO',
+} as const;
+export type StatusOrcamento = (typeof StatusOrcamento)[keyof typeof StatusOrcamento];
+
+export const TipoMovimentacaoEstoque = {
+  ENTRADA: 'ENTRADA',
+  BAIXA: 'BAIXA',
+  AJUSTE: 'AJUSTE',
+} as const;
+export type TipoMovimentacaoEstoque =
+  (typeof TipoMovimentacaoEstoque)[keyof typeof TipoMovimentacaoEstoque];
 
 export const SEGMENTO_ROTULOS: Record<SegmentoEmpresa, string> = {
   ILUMINACAO: 'Iluminação',

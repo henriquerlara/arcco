@@ -1,14 +1,13 @@
 @import './tokens.css';
 
 /* Fontes locais via @fontsource */
-@import '@fontsource/manrope/300.css';
 @import '@fontsource/manrope/400.css';
 @import '@fontsource/manrope/500.css';
 @import '@fontsource/manrope/600.css';
 @import '@fontsource/manrope/700.css';
-@import '@fontsource/cormorant-garamond/500.css';
-@import '@fontsource/cormorant-garamond/600.css';
-@import '@fontsource/cormorant-garamond/700.css';
+@import '@fontsource/montserrat/600.css';
+@import '@fontsource/montserrat/700.css';
+@import '@fontsource/montserrat/800.css';
 
 @tailwind base;
 @tailwind components;
@@ -33,6 +32,9 @@
     font-size: 14px;
     line-height: 1.55;
     min-height: 100vh;
+    background-image:
+      radial-gradient(ellipse 120% 80% at 100% -20%, rgba(184, 170, 151, 0.14), transparent 50%),
+      radial-gradient(ellipse 90% 60% at -10% 100%, rgba(8, 47, 52, 0.06), transparent 45%);
   }
 
   h1,
@@ -40,7 +42,7 @@
   h3,
   h4 {
     font-weight: 600;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.035em;
   }
 
   ::-webkit-scrollbar {
@@ -67,18 +69,60 @@
 
 @layer components {
   .fonte-marca {
-    font-family: 'Cormorant Garamond', ui-serif, Georgia, serif;
+    font-family: 'Montserrat', 'Manrope', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    text-transform: none;
+  }
+
+  .fonte-marca-rotulo {
+    font-family: 'Montserrat', 'Manrope', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
   }
 
   .foco-anel {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(199, 164, 84, 0.35);
+    box-shadow: 0 0 0 3px rgba(7, 59, 66, 0.18);
   }
 
   /* Scrollbar clara sobre fundo escuro (sidebar) */
   .scroll-escuro::-webkit-scrollbar-thumb {
-    background: rgba(228, 204, 139, 0.18);
+    background: rgba(217, 206, 192, 0.24);
     background-clip: content-box;
+  }
+
+  .rotulo-editorial {
+    font-family: 'Montserrat', 'Manrope', ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  /* Superfície plana — sem sombra; hover só em .superficie-interativa */
+  .superficie-arquitetonica {
+    border: 1px solid color-mix(in srgb, var(--arcco-borda) 88%, transparent);
+    background: color-mix(in srgb, var(--arcco-branco) 94%, transparent);
+  }
+
+  .superficie-interativa {
+    cursor: pointer;
+    transition:
+      border-color 160ms ease,
+      background-color 160ms ease;
+  }
+
+  .superficie-interativa:hover {
+    border-color: color-mix(in srgb, var(--arcco-dourado) 55%, var(--arcco-borda));
+    background: color-mix(in srgb, var(--arcco-marfim) 42%, var(--arcco-branco));
+  }
+
+  .superficie-interativa:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(7, 59, 66, 0.16);
   }
 }
 
@@ -91,4 +135,15 @@
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

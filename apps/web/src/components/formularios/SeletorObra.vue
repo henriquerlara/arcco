@@ -56,7 +56,7 @@ watch(
 <template>
   <ComboboxRoot v-model="selecionado" v-model:search-term="busca">
     <ComboboxAnchor
-      class="flex h-10 w-full items-center justify-between rounded-md border bg-branco px-3 text-sm shadow-suave focus-within:ring-2 focus-within:ring-ring"
+      class="flex h-10 w-full items-center justify-between rounded-md border bg-branco px-3 text-sm focus-within:ring-2 focus-within:ring-ring"
       :class="invalido ? 'border-erro' : 'border-borda'"
     >
       <span v-if="rotuloSelecionado" class="truncate text-texto">{{ rotuloSelecionado }}</span>
@@ -78,7 +78,7 @@ watch(
           <Search class="size-4 text-texto-secundario" />
           <ComboboxInput
             class="h-10 w-full bg-transparent text-sm outline-none placeholder:text-texto-secundario/70"
-            placeholder="Digite o nome da obra"
+            placeholder="Busque pelo projeto ou endereço"
           />
         </div>
         <ComboboxViewport class="p-1">

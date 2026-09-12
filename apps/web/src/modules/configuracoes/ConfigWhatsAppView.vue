@@ -9,6 +9,7 @@ import {
   QrCode,
   Send,
   RefreshCw,
+  BadgeCheck,
 } from 'lucide-vue-next';
 import { StatusConexaoWhatsApp } from '@arcco/contratos';
 import CabecalhoPagina from '@/components/layout/CabecalhoPagina.vue';
@@ -23,6 +24,7 @@ import Textarea from '@/components/ui/Textarea.vue';
 import Button from '@/components/ui/Button.vue';
 import BadgeStatus from '@/components/compartilhados/BadgeStatus.vue';
 import Skeleton from '@/components/compartilhados/Skeleton.vue';
+import MetaWhatsAppConnect from '@/integrations/meta-whatsapp/MetaWhatsAppConnect.vue';
 import { servicoWhatsApp } from '@/services';
 import { useNotificacao } from '@/composables/useNotificacao';
 import type { StatusWhatsApp } from '@/types';
@@ -133,17 +135,28 @@ async function simular() {
 
 <template>
   <div class="space-y-5">
-    <CabecalhoPagina titulo="Configurações" descricao="Gerencie os dados e o funcionamento da sua conta." />
+    <CabecalhoPagina
+      titulo="Configurações"
+      descricao="Dois provedores WhatsApp na transição: Evolution (atual) e Meta Cloud API (oficial)."
+    />
     <NavConfiguracoes />
+
+    <p class="rounded-md border border-borda bg-marfim/50 px-3 py-2 text-sm text-texto-secundario">
+      A Evolution API continua operando normalmente. A Meta é uma integração paralela — não substitui
+      nem migra conexões existentes.
+    </p>
 
     <div class="grid gap-4 lg:grid-cols-2">
       <Card>
         <CardHeader>
           <CardTitle class="flex items-center gap-2">
-            <MessageCircle class="size-5 text-sucesso" /> Conexão do WhatsApp
+            <MessageCircle class="size-5 text-sucesso" /> Evolution API
           </CardTitle>
         </CardHeader>
         <CardContent class="space-y-4">
+          <p class="text-xs text-texto-secundario">
+            Conexão atual via QR Code / instância Evolution. Fluxos de teste e operação existentes.
+          </p>
           <div v-if="isLoading && !status"><Skeleton class="h-24 w-full" /></div>
           <template v-else>
             <div class="flex items-center justify-between rounded-md border border-borda bg-marfim/40 p-3">
@@ -202,14 +215,22 @@ async function simular() {
 
       <Card>
         <CardHeader>
+          <CardTitle class="flex items-center gap-2">
+            <BadgeCheck class="size-5 text-info" /> WhatsApp Oficial (Meta)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <MetaWhatsAppConnect />
+        </CardContent>
+      </Card>
+
+      <Card v-if="ehMock" class="lg:col-span-2">
+        <CardHeader>
           <CardTitle class="flex items-center gap-2"><Send class="size-5 text-info" /> Simulador de mensagem</CardTitle>
         </CardHeader>
         <CardContent class="space-y-4">
           <p class="text-sm text-texto-secundario">
             Use o simulador para testar o fluxo do chatbot sem depender de uma conexão real.
-            <span v-if="!ehMock" class="text-alerta">
-              Disponível no modo de provedor <strong>MOCK</strong>.
-            </span>
           </p>
           <form class="space-y-4" @submit.prevent="simular">
             <div class="grid gap-4 sm:grid-cols-2">
@@ -228,7 +249,7 @@ async function simular() {
             </div>
             <Button
               :carregando="simulando"
-              :disabled="!ehMock || !simulador.telefone || !simulador.texto.trim()"
+              :disabled="!simulador.telefone || !simulador.texto.trim()"
               @click="simular"
             >
               <Send class="size-4" /> Simular recebimento
