@@ -47,6 +47,7 @@ const form = reactive({
   email: '',
   tipo: TipoContato.OUTRO as string,
   empresaNome: '',
+  documento: '',
   origem: '',
   observacoes: '',
   responsavelId: null as string | null,
@@ -65,6 +66,7 @@ watch(
     form.email = c?.email ?? '';
     form.tipo = c?.tipo ?? TipoContato.OUTRO;
     form.empresaNome = c?.empresaNome ?? '';
+    form.documento = c?.documento ?? '';
     form.origem = c?.origem ?? '';
     form.observacoes = c?.observacoes ?? '';
     form.responsavelId = c?.responsavelId ?? null;
@@ -90,6 +92,7 @@ async function salvar() {
       email: form.email || undefined,
       tipo: form.tipo as TipoContato,
       empresaNome: form.empresaNome || undefined,
+      documento: form.documento || null,
       origem: form.origem || undefined,
       observacoes: form.observacoes || undefined,
       responsavelId: form.responsavelId,
@@ -98,7 +101,7 @@ async function salvar() {
     const salvo = ehEdicao.value
       ? await servicoContatos.atualizar(props.contato!.id, payload)
       : await servicoContatos.criar(payload);
-    sucesso(ehEdicao.value ? 'Contato atualizado.' : 'Contato criado.');
+    sucesso(ehEdicao.value ? 'Pessoa atualizada.' : 'Pessoa criada.');
     await queryClient.invalidateQueries({ queryKey: ['contatos'] });
     emit('salvo', salvo);
     aberto.value = false;
@@ -113,8 +116,8 @@ async function salvar() {
 <template>
   <Dialog
     v-model="aberto"
-    :titulo="ehEdicao ? 'Editar contato' : 'Novo contato'"
-    descricao="Dados de quem participa das negociações e obras."
+    :titulo="ehEdicao ? 'Editar pessoa' : 'Nova pessoa'"
+    descricao="Dados de quem participa dos negócios e projetos."
     tamanho="lg"
   >
     <form class="space-y-4" @submit.prevent="salvar">
@@ -126,7 +129,7 @@ async function salvar() {
         </div>
         <div class="space-y-1.5">
           <Label for="contato-telefone" obrigatorio>Telefone</Label>
-          <Input id="contato-telefone" v-model="form.telefone" placeholder="(11) 90000-0000" :invalido="!!erros.telefone" autocomplete="tel" />
+          <Input id="contato-telefone" v-model="form.telefone" mascara="telefone" placeholder="(11) 90000-0000" :invalido="!!erros.telefone" autocomplete="tel" />
           <p v-if="erros.telefone" class="text-xs text-erro">{{ erros.telefone }}</p>
         </div>
         <div class="space-y-1.5">
@@ -140,6 +143,16 @@ async function salvar() {
         <div class="space-y-1.5">
           <Label for="contato-empresa">Empresa</Label>
           <Input id="contato-empresa" v-model="form.empresaNome" autocomplete="organization" />
+        </div>
+        <div class="space-y-1.5">
+          <Label for="contato-documento">CPF/CNPJ</Label>
+          <Input
+            id="contato-documento"
+            v-model="form.documento"
+            mascara="documento"
+            placeholder="000.000.000-00"
+            autocomplete="off"
+          />
         </div>
         <div class="space-y-1.5">
           <Label for="contato-origem">Origem</Label>

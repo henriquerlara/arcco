@@ -1,0 +1,66 @@
+# Homologação grátis. Plano free da API dorme após 15 min sem acesso.
+# Bancos ficam no Neon (não use o Postgres grátis do Render: ele expira em 30 dias).
+services:
+  - type: web
+    name: arcco-api
+    runtime: node
+    plan: free
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm db:generate && pnpm build:api && pnpm --filter @arcco/api exec prisma migrate deploy --schema prisma/platform/schema.prisma && pnpm --filter @arcco/api exec prisma migrate deploy
+    startCommand: node apps/api/dist/main.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PLATFORM_DATABASE_URL
+        sync: false
+      - key: EMPRESA_DATABASE_URL
+        sync: false
+      - key: FRONTEND_URL
+        fromService:
+          name: arcco-web
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: API_PUBLIC_URL
+        fromService:
+          name: arcco-api
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+      - key: AI_PROVIDER
+        value: rules
+      - key: STORAGE_PROVIDER
+        value: local
+      - key: FOCUS_NFE_ENV
+        value: homologacao
+      - key: META_WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: META_WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: META_WHATSAPP_WABA_ID
+        sync: false
+      - key: META_WHATSAPP_VERIFY_TOKEN
+        sync: false
+
+  - type: web
+    name: arcco-web
+    runtime: static
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm --filter @arcco/contratos build && pnpm build:web
+    staticPublishPath: apps/web/dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: arcco-api
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: VITE_APP_NAME
+        value: ARCCO
+      - key: VITE_META_APP_ID
+        sync: false
+      - key: VITE_META_WHATSAPP_CONFIG_ID
+        sync: false

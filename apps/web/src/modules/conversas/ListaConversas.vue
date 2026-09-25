@@ -1,9 +1,30 @@
 <script setup lang="ts">
 import type { Conversa } from '@/types';
 import BadgeStatus from '@/components/compartilhados/BadgeStatus.vue';
+import Badge from '@/components/ui/Badge.vue';
 import Skeleton from '@/components/compartilhados/Skeleton.vue';
 import { iniciais, tempoRelativo, formatarTelefone } from '@/composables/formatadores';
 import { cn } from '@/composables/cn';
+
+const ROTULO_INTENCAO: Record<string, string> = {
+  VENDAS: 'Vendas',
+  NOVO_ORCAMENTO: 'Novo orçamento',
+  NEGOCIAR_ORCAMENTO: 'Negociar',
+  AJUSTAR_ORCAMENTO: 'Ajuste',
+  FINANCEIRO: 'Financeiro',
+  ENTREGA: 'Entrega',
+  SAC: 'SAC',
+  POS_VENDA: 'Pós-venda',
+  FALAR_COM_PESSOA: 'Humano',
+  DUVIDA: 'Dúvida',
+  ACOMPANHAR_SOLICITACAO: 'Acompanhar',
+  OUTRO: 'Outro',
+};
+
+function rotuloIntencao(valor?: string | null): string | null {
+  if (!valor) return null;
+  return ROTULO_INTENCAO[valor] ?? valor;
+}
 
 defineProps<{
   conversas: Conversa[];
@@ -64,9 +85,12 @@ const emit = defineEmits<{ (e: 'selecionar', id: string): void }>();
         <p class="mt-0.5 truncate text-xs text-texto-secundario">
           {{ conversa.ultimaMensagem ?? conversa.ultimaMensagemPreview ?? 'Sem mensagens' }}
         </p>
-        <div class="mt-1.5 flex items-center gap-1.5">
+        <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
           <BadgeStatus familia="statusConversa" :valor="conversa.status" />
           <BadgeStatus familia="modoAtendimento" :valor="conversa.modo" />
+          <Badge v-if="rotuloIntencao(conversa.intencaoAtual ?? conversa.intencao)" variante="neutro">
+            {{ rotuloIntencao(conversa.intencaoAtual ?? conversa.intencao) }}
+          </Badge>
         </div>
       </div>
     </button>

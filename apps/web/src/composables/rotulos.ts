@@ -1,5 +1,4 @@
 import {
-  DirecaoMensagem,
   ModoAtendimento,
   PrioridadeOportunidade,
   StatusConexaoWhatsApp,
@@ -14,7 +13,7 @@ import {
 } from '@arcco/contratos';
 
 export const ROTULO_TIPO_CONTATO: Record<TipoContato, string> = {
-  PROPRIETARIO_OBRA: 'Proprietário da obra',
+  PROPRIETARIO_OBRA: 'Proprietário do projeto',
   ARQUITETO: 'Arquiteto',
   ENGENHEIRO: 'Engenheiro',
   CONSTRUTORA: 'Construtora',
@@ -81,9 +80,9 @@ export const ROTULO_TIPO_CAMPO: Record<TipoCampoPersonalizado, string> = {
 };
 
 export const ROTULO_ENTIDADE_CAMPO: Record<EntidadeCampoPersonalizado, string> = {
-  CONTATO: 'Contato',
-  OBRA: 'Obra',
-  OPORTUNIDADE: 'Oportunidade',
+  CONTATO: 'Pessoa',
+  OBRA: 'Projeto',
+  OPORTUNIDADE: 'Negócio',
 };
 
 export const ROTULO_STATUS_WHATSAPP: Record<StatusConexaoWhatsApp, string> = {
@@ -92,11 +91,6 @@ export const ROTULO_STATUS_WHATSAPP: Record<StatusConexaoWhatsApp, string> = {
   QR_CODE: 'Aguardando QR Code',
   CONECTADO: 'Conectado',
   ERRO: 'Erro',
-};
-
-export const ROTULO_DIRECAO: Record<DirecaoMensagem, string> = {
-  RECEBIDA: 'Recebida',
-  ENVIADA: 'Enviada',
 };
 
 export const ROTULO_INTENCAO: Record<IntencaoChatbot, string> = {

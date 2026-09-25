@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   criarRespostaPaginada,
+  TipoAtividade,
   type criarAtividadeSchema,
   type atualizarAtividadeSchema,
   type paginacaoQuerySchema,
@@ -18,6 +19,8 @@ type PaginacaoQuery = z.infer<typeof paginacaoQuerySchema> & {
   concluida?: string;
   responsavelId?: string;
   oportunidadeId?: string;
+  tipo?: string;
+  atrasadas?: string;
 };
 
 const INCLUDE_PADRAO = {
@@ -42,10 +45,18 @@ export class AtividadesService {
 
   async listar(empresaId: string, query: PaginacaoQuery) {
     const where: Prisma.AtividadeWhereInput = { empresaId };
-    if (query.concluida === 'true') where.concluida = true;
-    if (query.concluida === 'false') where.concluida = false;
+    if (query.atrasadas === 'true' || query.atrasadas === '1') {
+      where.concluida = false;
+      where.vencimento = { lt: new Date() };
+    } else {
+      if (query.concluida === 'true') where.concluida = true;
+      if (query.concluida === 'false') where.concluida = false;
+    }
     if (query.responsavelId) where.responsavelId = query.responsavelId;
     if (query.oportunidadeId) where.oportunidadeId = query.oportunidadeId;
+    if (query.tipo && Object.values(TipoAtividade).includes(query.tipo as TipoAtividade)) {
+      where.tipo = query.tipo as TipoAtividade;
+    }
 
     const [dados, total] = await this.prisma.$transaction([
       this.prisma.atividade.findMany({

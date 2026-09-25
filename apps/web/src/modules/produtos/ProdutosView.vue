@@ -17,10 +17,17 @@ import Switch from '@/components/ui/Switch.vue';
 import type { Produto } from '@/types';
 import { servicoProdutos } from '@/services';
 import { useNotificacao } from '@/composables/useNotificacao';
-import { formatarMoeda } from '@/composables/formatadores';
+import { formatarMoeda, parsearMoeda } from '@/composables/formatadores';
+import { useAutenticacaoStore } from '@/stores/autenticacao';
+import { PerfilUsuario } from '@arcco/contratos';
 
 const queryClient = useQueryClient();
+const auth = useAutenticacaoStore();
 const { notificarErro, sucesso } = useNotificacao();
+
+const podeEditar = computed(() =>
+  auth.temPerfil(PerfilUsuario.PROPRIETARIO, PerfilUsuario.GESTOR, PerfilUsuario.VENDEDOR),
+);
 
 const formAberto = ref(false);
 const salvando = ref(false);
@@ -37,6 +44,7 @@ const form = reactive({
   nome: '',
   descricao: '',
   unidade: 'un',
+  ncm: '',
   precoVenda: 0,
   saldoInicial: 0,
   estoqueMinimo: 0,
@@ -51,6 +59,7 @@ function abrirNovo() {
     nome: '',
     descricao: '',
     unidade: 'un',
+    ncm: '',
     precoVenda: 0,
     saldoInicial: 0,
     estoqueMinimo: 0,
@@ -67,6 +76,7 @@ function abrirEdicao(p: Produto) {
     nome: p.nome,
     descricao: p.descricao ?? '',
     unidade: p.unidade,
+    ncm: p.ncm ?? '',
     precoVenda: p.precoVenda,
     saldoInicial: 0,
     estoqueMinimo: p.estoqueMinimo,
@@ -86,6 +96,7 @@ async function salvar() {
         nome: form.nome,
         descricao: form.descricao || null,
         unidade: form.unidade || 'un',
+        ncm: form.ncm.replace(/\D/g, '') || null,
         precoVenda: Number(form.precoVenda) || 0,
         estoqueMinimo: Number(form.estoqueMinimo) || 0,
         controlaEstoque: form.controlaEstoque,
@@ -97,6 +108,7 @@ async function salvar() {
         nome: form.nome,
         descricao: form.descricao || null,
         unidade: form.unidade || 'un',
+        ncm: form.ncm.replace(/\D/g, '') || null,
         precoVenda: Number(form.precoVenda) || 0,
         saldoInicial: Number(form.saldoInicial) || 0,
         estoqueMinimo: Number(form.estoqueMinimo) || 0,
@@ -123,7 +135,7 @@ async function salvar() {
       descricao="Catálogo do que você vende. Saldo e movimentações ficam em Estoque."
     >
       <template #acoes>
-        <Button @click="abrirNovo"><Plus class="size-4" /> Novo produto</Button>
+        <Button v-if="podeEditar" @click="abrirNovo"><Plus class="size-4" /> Novo produto</Button>
       </template>
     </CabecalhoPagina>
 
@@ -136,7 +148,7 @@ async function salvar() {
       titulo="Nenhum produto"
       descricao="Cadastre o catálogo aqui. Depois opere o saldo em Estoque."
     >
-      <template #acao><Button @click="abrirNovo"><Plus class="size-4" /> Novo produto</Button></template>
+      <template v-if="podeEditar" #acao><Button @click="abrirNovo"><Plus class="size-4" /> Novo produto</Button></template>
     </EstadoVazio>
     <div v-else class="grid gap-3 sm:grid-cols-2">
       <Card v-for="p in linhas" :key="p.id" class="p-4">
@@ -154,7 +166,7 @@ async function salvar() {
               Mínimo alerta: {{ p.estoqueMinimo }} {{ p.unidade }}
             </p>
           </div>
-          <Button variante="fantasma" tamanho="icone-sm" @click="abrirEdicao(p)">
+          <Button v-if="podeEditar" variante="fantasma" tamanho="icone-sm" @click="abrirEdicao(p)">
             <Pencil class="size-4" />
           </Button>
         </div>
@@ -176,8 +188,18 @@ async function salvar() {
           <Input v-model="form.unidade" />
         </div>
         <div class="space-y-1.5">
+          <Label>NCM</Label>
+          <Input v-model="form.ncm" mascara="ncm" placeholder="0000.00.00" />
+          <p class="text-xs text-texto-secundario">Obrigatório para emitir NF-e.</p>
+        </div>
+        <div class="space-y-1.5">
           <Label>Preço de venda</Label>
-          <Input v-model.number="form.precoVenda" type="number" min="0" step="0.01" />
+          <Input
+            :model-value="form.precoVenda"
+            mascara="moeda"
+            placeholder="0,00"
+            @update:model-value="(v) => (form.precoVenda = parsearMoeda(String(v)) ?? 0)"
+          />
         </div>
         <div class="space-y-1.5">
           <Label>Estoque mínimo (alerta)</Label>

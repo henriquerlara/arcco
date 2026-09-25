@@ -91,7 +91,7 @@ async function concluir() {
             </div>
             <div class="space-y-1.5">
               <Label>Telefone comercial <span class="font-normal text-texto-secundario">(opcional)</span></Label>
-              <Input v-model="telefone" placeholder="(11) 90000-0000" autocomplete="tel" />
+              <Input v-model="telefone" mascara="telefone" placeholder="(11) 90000-0000" autocomplete="tel" />
             </div>
             <div class="grid gap-4 sm:grid-cols-[1fr_96px]">
               <div class="space-y-1.5">
@@ -100,7 +100,7 @@ async function concluir() {
               </div>
               <div class="space-y-1.5">
                 <Label>UF</Label>
-                <Input v-model="estado" maxlength="2" class="uppercase" autocomplete="address-level1" />
+                <Input v-model="estado" mascara="uf" placeholder="UF" autocomplete="address-level1" />
               </div>
             </div>
             <Button class="mt-3 w-full" tamanho="lg" :carregando="salvando" type="submit">

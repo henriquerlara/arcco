@@ -7,10 +7,12 @@ import {
   TipoMensagem,
   StatusMensagem,
   TipoAtividade,
+  PerfilUsuario,
   configuracoesEmpresaSchema,
   estadoBotSchema,
   type EstadoBot,
 } from '@arcco/contratos';
+import { PlatformPrismaService } from '../../database/platform-prisma.service';
 import { PrismaService } from '../../database/prisma.service';
 import { AI_PROVIDER, type AIProvider } from '../ia/ia.provider';
 import { ConversasService } from '../conversas/conversas.service';
@@ -18,6 +20,7 @@ import { OportunidadesService } from '../oportunidades/oportunidades.service';
 import { AtividadesService } from '../atividades/atividades.service';
 import { estaEmHorarioAtendimento } from '../../common/utils/horario';
 import { normalizarTelefone } from '../../common/utils/telefone';
+import { atribuirVendedor } from '../../common/utils/distribuicao';
 import { intencaoPorOpcaoMenu } from '../ia/regras-intencao';
 import { avancarChatbot, FLUXO } from './maquina-estados';
 import { lerAjustes, novoItemAjuste, persistirAjustes } from '../../common/utils/ajustes-persistir';
@@ -48,6 +51,7 @@ export class ChatbotService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly platform: PlatformPrismaService,
     private readonly conversas: ConversasService,
     private readonly oportunidades: OportunidadesService,
     private readonly atividades: AtividadesService,
@@ -68,7 +72,7 @@ export class ChatbotService {
       return { respostas: [], transferido: false };
     }
 
-    const empresa = await this.prisma.empresa.findUnique({ where: { id: conversa.empresaId } });
+    const empresa = await this.platform.empresa.findUnique({ where: { id: conversa.empresaId } });
     const config = configuracoesEmpresaSchema.parse(empresa?.configuracoes ?? {});
 
     if (!config.chatbot.ativo) {
@@ -241,6 +245,7 @@ export class ChatbotService {
 
     const contatoId = await this.garantirContato(conversa, dados.nome, dados.campos);
     const titulo = dados.titulo?.trim() || dados.necessidade?.trim();
+    const responsavelId = await this.escolherResponsavel(conversa.empresaId);
 
     const opcoesCriacao = {
       origemHistorico: OrigemHistoricoEtapa.CHATBOT,
@@ -254,6 +259,7 @@ export class ChatbotService {
         titulo,
         contatoId,
         origem: 'whatsapp',
+        responsavelId,
         prioridade: String(infos.tipo_solicitacao ?? '').toLowerCase().includes('ajuste')
           ? 'ALTA'
           : 'MEDIA',
@@ -297,7 +303,7 @@ export class ChatbotService {
     const responsavelId =
       oportunidade.responsavelId ??
       (
-        await this.prisma.usuario.findFirst({
+        await this.platform.usuario.findFirst({
           where: { empresaId: conversa.empresaId, ativo: true },
           orderBy: { criadoEm: 'asc' },
           select: { id: true },
@@ -317,6 +323,42 @@ export class ChatbotService {
     } catch (erro) {
       this.logger.warn(`Não foi possível criar tarefa de ajuste: ${(erro as Error).message}`);
     }
+  }
+
+  private async escolherResponsavel(empresaId: string): Promise<string | null> {
+    const usuarios = await this.platform.usuario.findMany({
+      where: { empresaId, ativo: true },
+      select: { id: true, perfil: true },
+      orderBy: { criadoEm: 'asc' },
+    });
+    if (usuarios.length === 0) return null;
+
+    const vendedores = usuarios.filter((u) => u.perfil === PerfilUsuario.VENDEDOR);
+    const pool = vendedores.length > 0 ? vendedores : usuarios;
+
+    const cargas = await this.prisma.oportunidade.groupBy({
+      by: ['responsavelId'],
+      where: {
+        empresaId,
+        fechadaEm: null,
+        responsavelId: { in: pool.map((u) => u.id) },
+      },
+      _count: { _all: true },
+    });
+    const cargaPorId = new Map(
+      cargas
+        .filter((c) => c.responsavelId)
+        .map((c) => [c.responsavelId!, c._count._all]),
+    );
+
+    const escolhido = atribuirVendedor(
+      pool.map((u) => ({
+        id: u.id,
+        ativo: true,
+        cargaAtual: cargaPorId.get(u.id) ?? 0,
+      })),
+    );
+    return escolhido?.id ?? null;
   }
 
   private async garantirContato(

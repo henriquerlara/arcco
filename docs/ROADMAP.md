@@ -123,12 +123,11 @@ Converter um orçamento aprovado em **pedido de venda**:
 
 ## 10. Meta / WhatsApp Cloud API
 
-**Status:** Em estudo · **Base atual:** integração via Evolution API (ver [`EVOLUTION_API.md`](EVOLUTION_API.md)).
+**Status:** Canal oficial do produto.
 
-- Provider adicional para a **WhatsApp Cloud API** oficial da Meta (ao lado de `mock`/`evolution`), reaproveitando o contrato `WhatsAppProvider`.
-- Suporte a **templates de mensagem** aprovados e janelas de atendimento.
-- Verificação de webhook e credenciais da Meta.
-- Migração/coexistência com a Evolution.
+- WhatsApp Cloud API da Meta, reaproveitando o contrato `WhatsAppProvider`.
+- Templates de mensagem e janela de 24h.
+- Webhook e credenciais da Meta.
 
 ---
 
@@ -167,7 +166,7 @@ Converter um orçamento aprovado em **pedido de venda**:
 | 7 | Integração ERP | Em estudo | Orçamento/Pedidos/Financeiro |
 | 8 | OCR de documentos | Futuro | Arquivos |
 | 9 | Transcrição de áudio | Futuro | WhatsApp/IA |
-| 10 | Meta / WhatsApp Cloud API | Em estudo | Camada de providers WhatsApp |
+| 10 | Meta / WhatsApp Cloud API | Canal oficial | Webhook e credenciais Meta |
 | 11 | Relatórios | Planejado | Dados do CRM/atendimento |
 | 12 | Billing / Assinaturas | Futuro | Multiempresa |
 

@@ -18,13 +18,20 @@ import Label from '@/components/ui/Label.vue';
 import SeletorContato from '@/components/formularios/SeletorContato.vue';
 import ObraFormulario from './ObraFormulario.vue';
 import { servicoObras } from '@/services';
-import { formatarTelefone, iniciais } from '@/composables/formatadores';
+import { aplicarMascara, formatarTelefone, iniciais } from '@/composables/formatadores';
 import { useNotificacao } from '@/composables/useNotificacao';
+import { useAutenticacaoStore } from '@/stores/autenticacao';
+import { PerfilUsuario } from '@arcco/contratos';
 
 const rota = useRoute();
 const router = useRouter();
 const queryClient = useQueryClient();
+const auth = useAutenticacaoStore();
 const { notificarErro, sucesso } = useNotificacao();
+
+const podeExcluir = computed(() =>
+  auth.temPerfil(PerfilUsuario.PROPRIETARIO, PerfilUsuario.GESTOR, PerfilUsuario.VENDEDOR),
+);
 
 const id = computed(() => rota.params.id as string);
 const formAberto = ref(false);
@@ -44,7 +51,7 @@ const obra = computed(() => data.value);
 const enderecoCompleto = computed(() => {
   const o = obra.value;
   if (!o) return '';
-  return [o.endereco, o.bairro, o.cidade && `${o.cidade}/${o.estado ?? ''}`, o.cep]
+  return [o.endereco, o.bairro, o.cidade && `${o.cidade}/${o.estado ?? ''}`, o.cep && aplicarMascara('cep', o.cep)]
     .filter(Boolean)
     .join(' · ');
 });
@@ -53,7 +60,7 @@ async function excluir() {
   excluindo.value = true;
   try {
     await servicoObras.excluir(id.value);
-    sucesso('Obra excluída.');
+    sucesso('Projeto excluído.');
     await queryClient.invalidateQueries({ queryKey: ['obras'] });
     await router.push({ name: 'obras' });
   } catch (e) {
@@ -68,7 +75,7 @@ async function vincular() {
   salvandoVinculo.value = true;
   try {
     await servicoObras.vincularContato(id.value, contatoParaVincular.value, papelVinculo.value);
-    sucesso('Contato vinculado à obra.');
+    sucesso('Pessoa vinculada ao projeto.');
     contatoParaVincular.value = null;
     papelVinculo.value = '';
     vinculoAberto.value = false;
@@ -94,7 +101,7 @@ async function desvincular(vinculoId: string) {
 <template>
   <div class="space-y-5">
     <RouterLink to="/app/obras" class="inline-flex items-center gap-1.5 text-sm text-texto-secundario hover:text-texto">
-      <ArrowLeft class="size-4" /> Obras
+      <ArrowLeft class="size-4" /> Projetos
     </RouterLink>
 
     <EstadoErro v-if="isError" :erro="error" @tentar-novamente="refetch()" />
@@ -117,7 +124,7 @@ async function desvincular(vinculoId: string) {
         </div>
         <div class="flex gap-2">
           <Button variante="secundario" @click="formAberto = true"><Pencil class="size-4" /> Editar</Button>
-          <Button variante="contorno" @click="confirmarExclusao = true">
+          <Button v-if="podeExcluir" variante="contorno" @click="confirmarExclusao = true">
             <Trash2 class="size-4 text-erro" />
           </Button>
         </div>
@@ -127,7 +134,7 @@ async function desvincular(vinculoId: string) {
         <!-- Contatos vinculados -->
         <Card class="lg:col-span-2">
           <CardHeader class="flex-row items-center justify-between">
-            <CardTitle class="flex items-center gap-2"><Link2 class="size-4 text-dourado-hover" /> Contatos da obra</CardTitle>
+            <CardTitle class="flex items-center gap-2"><Link2 class="size-4 text-dourado-hover" /> Pessoas do projeto</CardTitle>
             <Button variante="secundario" tamanho="sm" @click="vinculoAberto = true">
               <Plus class="size-4" /> Vincular
             </Button>
@@ -154,6 +161,7 @@ async function desvincular(vinculoId: string) {
                   </span>
                 </RouterLink>
                 <button
+                  v-if="podeExcluir"
                   class="rounded-md p-1.5 text-texto-secundario hover:bg-marfim hover:text-erro"
                   @click="desvincular(vinculo.id)"
                 >
@@ -163,7 +171,7 @@ async function desvincular(vinculoId: string) {
             </ul>
             <div v-else class="flex flex-col items-center gap-2 py-8 text-center text-sm text-texto-secundario">
               <User class="size-6" />
-              Nenhum contato vinculado ainda.
+              Nenhuma pessoa vinculada ainda.
             </div>
           </CardContent>
         </Card>
@@ -181,14 +189,14 @@ async function desvincular(vinculoId: string) {
 
     <ObraFormulario v-model="formAberto" :obra="obra" @salvo="refetch()" />
 
-    <Dialog v-model="vinculoAberto" titulo="Vincular contato" descricao="Relacione uma pessoa a esta obra." tamanho="md">
+    <Dialog v-model="vinculoAberto" titulo="Vincular pessoa" descricao="Relacione uma pessoa a este projeto." tamanho="md">
       <div class="space-y-4">
         <div class="space-y-1.5">
-          <Label obrigatorio>Contato</Label>
+          <Label obrigatorio>Pessoa</Label>
           <SeletorContato v-model="contatoParaVincular" />
         </div>
         <div class="space-y-1.5">
-          <Label obrigatorio>Papel na obra</Label>
+          <Label obrigatorio>Papel no projeto</Label>
           <Input v-model="papelVinculo" placeholder="Ex.: Arquiteto responsável, comprador…" />
         </div>
       </div>
@@ -206,8 +214,8 @@ async function desvincular(vinculoId: string) {
 
     <ModalConfirmacao
       v-model="confirmarExclusao"
-      titulo="Excluir obra?"
-      descricao="Os vínculos com contatos e oportunidades serão desfeitos."
+      titulo="Excluir projeto?"
+      descricao="Os vínculos com pessoas e negócios serão desfeitos."
       texto-confirmar="Excluir"
       perigo
       :carregando="excluindo"

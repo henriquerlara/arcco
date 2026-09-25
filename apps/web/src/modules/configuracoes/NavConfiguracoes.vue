@@ -1,20 +1,36 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
+import { PerfilUsuario } from '@arcco/contratos';
+import { useAutenticacaoStore } from '@/stores/autenticacao';
 
 const rota = useRoute();
+const auth = useAutenticacaoStore();
 
-const itens = [
-  { rotulo: 'Empresa', nome: 'config-empresa' },
-  { rotulo: 'Equipe', nome: 'config-equipe' },
-  { rotulo: 'WhatsApp', nome: 'config-whatsapp' },
-];
+const ehGestor = computed(() =>
+  auth.temPerfil(PerfilUsuario.PROPRIETARIO, PerfilUsuario.GESTOR),
+);
 
-const avancados = [
-  { rotulo: 'Automação', nome: 'config-chatbot' },
-  { rotulo: 'Funil', nome: 'config-funil' },
-  { rotulo: 'Categorias', nome: 'config-categorias' },
-  { rotulo: 'Campos', nome: 'config-campos' },
-];
+const itens = computed(() => {
+  const base = [{ rotulo: 'Empresa', nome: 'config-empresa' }];
+  if (!ehGestor.value) return base;
+  return [
+    ...base,
+    { rotulo: 'Equipe', nome: 'config-equipe' },
+    { rotulo: 'WhatsApp', nome: 'config-whatsapp' },
+    { rotulo: 'Nota fiscal', nome: 'config-fiscal' },
+  ];
+});
+
+const avancados = computed(() => {
+  if (!ehGestor.value) return [];
+  return [
+    { rotulo: 'Automação', nome: 'config-chatbot' },
+    { rotulo: 'Funil', nome: 'config-funil' },
+    { rotulo: 'Categorias', nome: 'config-categorias' },
+    { rotulo: 'Campos', nome: 'config-campos' },
+  ];
+});
 </script>
 
 <template>
@@ -32,7 +48,7 @@ const avancados = [
     >
       {{ item.rotulo }}
     </RouterLink>
-    <details class="group relative ml-auto">
+    <details v-if="avancados.length" class="group relative ml-auto">
       <summary class="cursor-pointer list-none px-3 py-2.5 text-sm font-medium text-texto-secundario hover:text-texto">
         Avançado
       </summary>

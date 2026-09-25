@@ -113,4 +113,4 @@ Fora do horário, o bot ainda executa a triagem, mas acrescenta `mensagemForaHor
 - `chatbot/maquina-estados.spec.ts` — menu, Vendas/CPF, Financeiro, S.A.C, Entrega, Outros, opção inválida.
 - `ia/regras-intencao.spec.ts` — regras e menu 1–5.
 
-Simulador mock: ver [`EVOLUTION_API.md`](EVOLUTION_API.md#modo-mock-desenvolvimento).
+Simulador local: `POST /api/whatsapp/simulador/mensagem` (autenticado). O canal real entra por `POST /api/webhooks/meta/whatsapp`.

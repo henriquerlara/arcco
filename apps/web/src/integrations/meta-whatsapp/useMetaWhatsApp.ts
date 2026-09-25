@@ -72,7 +72,7 @@ function eventoErro(payload: MetaEmbeddedSignupPayload): boolean {
 }
 
 /**
- * Onboarding Meta WhatsApp Business App (coexistence) — isolado da Evolution.
+ * Onboarding Meta WhatsApp Business App (coexistence).
  */
 export function useMetaWhatsApp() {
   const config = shallowRef<MetaWhatsAppPublicConfig | null>(lerConfigMetaPublica());

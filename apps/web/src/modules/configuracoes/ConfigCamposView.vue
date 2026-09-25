@@ -160,7 +160,7 @@ async function excluir() {
 
 <template>
   <div class="space-y-5">
-    <CabecalhoPagina titulo="Configurações" descricao="Gerencie os dados e o funcionamento da sua conta.">
+    <CabecalhoPagina titulo="Campos" descricao="Informações extras em pessoas, projetos e negócios.">
       <template #acoes>
         <Button @click="abrirNovo"><Plus class="size-4" /> Novo campo</Button>
       </template>

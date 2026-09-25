@@ -87,7 +87,7 @@ async function salvar() {
     const salvo = ehEdicao.value
       ? await servicoObras.atualizar(props.obra!.id, payload)
       : await servicoObras.criar(payload);
-    sucesso(ehEdicao.value ? 'Obra atualizada.' : 'Obra criada.');
+    sucesso(ehEdicao.value ? 'Projeto atualizado.' : 'Projeto criado.');
     await queryClient.invalidateQueries({ queryKey: ['obras'] });
     emit('salvo', salvo);
     aberto.value = false;
@@ -127,7 +127,7 @@ async function salvar() {
         </div>
         <div class="space-y-1.5">
           <Label>CEP</Label>
-          <Input v-model="form.cep" />
+          <Input v-model="form.cep" mascara="cep" placeholder="00000-000" />
         </div>
         <div class="space-y-1.5 sm:col-span-2">
           <Label>Endereço</Label>
@@ -144,7 +144,7 @@ async function salvar() {
           </div>
           <div class="space-y-1.5">
             <Label>UF</Label>
-            <Input v-model="form.estado" />
+            <Input v-model="form.estado" mascara="uf" placeholder="UF" />
           </div>
         </div>
         <div class="space-y-1.5 sm:col-span-2">

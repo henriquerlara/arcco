@@ -26,10 +26,17 @@ import type { Produto } from '@/types';
 import { servicoProdutos } from '@/services';
 import { useNotificacao } from '@/composables/useNotificacao';
 import { formatarNumero } from '@/composables/formatadores';
+import { useAutenticacaoStore } from '@/stores/autenticacao';
+import { PerfilUsuario } from '@arcco/contratos';
 
 const queryClient = useQueryClient();
+const auth = useAutenticacaoStore();
 const { notificarErro, sucesso } = useNotificacao();
 const rota = useRoute();
+
+const podeEditar = computed(() =>
+  auth.temPerfil(PerfilUsuario.PROPRIETARIO, PerfilUsuario.GESTOR, PerfilUsuario.VENDEDOR),
+);
 
 const busca = ref('');
 const soCriticos = ref(rota.query.criticos === '1' || rota.query.criticos === 'true');
@@ -233,6 +240,7 @@ async function confirmarAjuste() {
             <td class="px-4 py-3">
               <div class="flex justify-end gap-1">
                 <Button
+                  v-if="podeEditar"
                   variante="fantasma"
                   tamanho="icone-sm"
                   title="Entrada"
@@ -241,6 +249,7 @@ async function confirmarAjuste() {
                   <PackagePlus class="size-4" />
                 </Button>
                 <Button
+                  v-if="podeEditar"
                   variante="fantasma"
                   tamanho="icone-sm"
                   title="Ajuste de inventário"

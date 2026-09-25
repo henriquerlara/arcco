@@ -8,7 +8,6 @@ import {
   ComboboxEmpty,
   ComboboxInput,
   ComboboxItem,
-  ComboboxPortal,
   ComboboxRoot,
   ComboboxTrigger,
   ComboboxViewport,
@@ -39,7 +38,29 @@ const { data, isFetching } = useQuery({
   staleTime: 30_000,
 });
 
-const opcoes = computed(() => data.value?.dados ?? []);
+function semAcento(valor: string) {
+  return valor.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('pt-BR');
+}
+
+const opcoes = computed(() => {
+  const lista = data.value?.dados ?? [];
+  const termo = semAcento(busca.value.trim());
+  if (!termo) return lista;
+  const digitos = termo.replace(/\D+/g, '');
+  return lista.filter((contato) => {
+    const nome = semAcento(contato.nome);
+    const empresa = semAcento(contato.empresaNome ?? '');
+    if (nome.includes(termo) || empresa.includes(termo)) return true;
+    if (!digitos) return false;
+    const telefone = `${contato.telefone ?? ''}`.replace(/\D+/g, '');
+    return telefone.includes(digitos);
+  });
+});
+
+/** A lista já vem filtrada pela API; o filtro do combobox compara o id e escondia todo resultado. */
+function manterOpcoes<T>(lista: T): T {
+  return lista;
+}
 
 const selecionado = computed({
   get: () => props.modelValue ?? '',
@@ -62,26 +83,32 @@ watch(
 </script>
 
 <template>
-  <ComboboxRoot v-model="selecionado" v-model:search-term="busca">
+  <ComboboxRoot
+    v-model="selecionado"
+    v-model:search-term="busca"
+    :display-value="() => ''"
+    :filter-function="manterOpcoes"
+  >
     <ComboboxAnchor
-      class="flex h-10 w-full items-center justify-between rounded-md border bg-branco px-3 text-sm focus-within:ring-2 focus-within:ring-ring"
+      class="flex h-10 w-full rounded-md border bg-branco text-sm focus-within:ring-2 focus-within:ring-ring"
       :class="invalido ? 'border-erro' : 'border-borda'"
     >
-      <span v-if="rotuloSelecionado" class="truncate text-texto">{{ rotuloSelecionado }}</span>
-      <span v-else class="truncate text-texto-secundario/70">
-        {{ placeholder ?? 'Buscar contato…' }}
-      </span>
-      <ComboboxTrigger>
-        <ChevronsUpDown class="size-4 text-texto-secundario" />
+      <ComboboxTrigger
+        class="flex h-full w-full items-center justify-between gap-2 bg-transparent px-3 text-left outline-none"
+      >
+        <span v-if="rotuloSelecionado" class="truncate text-texto">{{ rotuloSelecionado }}</span>
+        <span v-else class="truncate text-texto-secundario/70">
+          {{ placeholder ?? 'Buscar pessoa…' }}
+        </span>
+        <ChevronsUpDown class="size-4 shrink-0 text-texto-secundario" />
       </ComboboxTrigger>
     </ComboboxAnchor>
 
-    <ComboboxPortal>
-      <ComboboxContent
-        position="popper"
-        :side-offset="4"
-        class="z-50 max-h-72 w-[--radix-popper-anchor-width] overflow-hidden rounded-md border border-borda bg-branco shadow-flutuante animate-fade-in"
-      >
+    <ComboboxContent
+      position="popper"
+      :side-offset="4"
+      class="z-50 max-h-72 w-[--radix-popper-anchor-width] overflow-hidden rounded-md border border-borda bg-branco shadow-flutuante animate-fade-in"
+    >
         <div class="flex items-center gap-2 border-b border-borda px-3">
           <Search class="size-4 text-texto-secundario" />
           <ComboboxInput
@@ -91,7 +118,7 @@ watch(
         </div>
         <ComboboxViewport class="p-1">
           <ComboboxEmpty class="px-3 py-6 text-center text-sm text-texto-secundario">
-            {{ isFetching ? 'Buscando…' : 'Nenhum contato encontrado.' }}
+            {{ isFetching ? 'Buscando…' : 'Nenhuma pessoa encontrada.' }}
           </ComboboxEmpty>
           <ComboboxItem
             v-for="contato in opcoes"
@@ -108,7 +135,6 @@ watch(
             <Check v-if="selecionado === contato.id" class="size-4 text-dourado-hover" />
           </ComboboxItem>
         </ComboboxViewport>
-      </ComboboxContent>
-    </ComboboxPortal>
+    </ComboboxContent>
   </ComboboxRoot>
 </template>

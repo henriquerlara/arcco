@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  aplicarMascara,
   formatarMoeda,
   formatarTelefone,
   iniciais,
@@ -12,8 +13,19 @@ describe('formatadores', () => {
     expect(formatarMoeda(null)).toContain('0,00');
   });
 
+  it('aplica máscaras de digitação', () => {
+    expect(aplicarMascara('telefone', '11988887777')).toBe('(11) 98888-7777');
+    expect(aplicarMascara('documento', '12345678901')).toBe('123.456.789-01');
+    expect(aplicarMascara('cnpj', '12345678000199')).toBe('12.345.678/0001-99');
+    expect(aplicarMascara('cep', '30130000')).toBe('30130-000');
+    expect(aplicarMascara('uf', 'mg1')).toBe('MG');
+    expect(aplicarMascara('moeda', 1250.5)).toBe('1.250,50');
+    expect(aplicarMascara('ncm', '94051000')).toBe('9405.10.00');
+  });
+
   it('formata telefone brasileiro', () => {
     expect(formatarTelefone('11988887777')).toBe('(11) 98888-7777');
+    expect(formatarTelefone('553731800386')).toBe('+55 (37) 3180-0386');
     expect(formatarTelefone(null)).toBe('—');
   });
 

@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useQuery } from '@tanstack/vue-query';
-import { Filter } from 'lucide-vue-next';
+import { Filter, Plus } from 'lucide-vue-next';
 import CabecalhoPagina from '@/components/layout/CabecalhoPagina.vue';
 import EstadoErro from '@/components/compartilhados/EstadoErro.vue';
 import Skeleton from '@/components/compartilhados/Skeleton.vue';
@@ -10,6 +10,7 @@ import SeletorUsuario from '@/components/formularios/SeletorUsuario.vue';
 import SeletorCategoria from '@/components/formularios/SeletorCategoria.vue';
 import Button from '@/components/ui/Button.vue';
 import ColunaPipeline from './ColunaPipeline.vue';
+import OportunidadeFormulario from '@/modules/oportunidades/OportunidadeFormulario.vue';
 import { servicoOportunidades, type ColunaPipeline as TColuna } from '@/services';
 import { formatarMoeda } from '@/composables/formatadores';
 
@@ -18,6 +19,7 @@ const router = useRouter();
 const responsavelId = ref<string | null>(null);
 const categoriaId = ref<string | null>(null);
 const filtrosVisiveis = ref(false);
+const formAberto = ref(false);
 
 const filtros = computed(() => ({
   responsavelId: responsavelId.value ?? undefined,
@@ -61,13 +63,17 @@ function abrirParaOrcamento(id: string) {
 <template>
   <div class="flex h-full flex-col gap-5">
     <CabecalhoPagina
-      titulo="Pipeline"
+      titulo="Negócios"
       :descricao="`Progresso atualizado pelas ações do time · ${formatarMoeda(valorTotal)} em jogo`"
     >
       <template #acoes>
         <Button variante="secundario" @click="filtrosVisiveis = !filtrosVisiveis">
           <Filter class="size-4" />
           Filtros
+        </Button>
+        <Button @click="formAberto = true">
+          <Plus class="size-4" />
+          Novo negócio
         </Button>
       </template>
     </CabecalhoPagina>
@@ -102,5 +108,7 @@ function abrirParaOrcamento(id: string) {
         @enviar-orcamento="abrirParaOrcamento"
       />
     </div>
+
+    <OportunidadeFormulario v-model="formAberto" />
   </div>
 </template>

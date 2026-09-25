@@ -22,6 +22,7 @@ import CardTitle from '@/components/ui/CardTitle.vue';
 import CardContent from '@/components/ui/CardContent.vue';
 import Skeleton from '@/components/compartilhados/Skeleton.vue';
 import GraficoFunil from './GraficoFunil.vue';
+import ChecklistPosOnboarding from './ChecklistPosOnboarding.vue';
 import { servicoDashboard } from '@/services';
 import type { AlertaDashboard, PontoFunil } from '@/types';
 import { formatarMoeda, formatarPercentual, formatarNumero } from '@/composables/formatadores';
@@ -85,14 +86,37 @@ const alertas = computed<AlertaDashboard[]>(() => {
       gravidade: 'alerta',
     });
   }
+  const atrasadas = m.value?.atividades.atrasadas ?? 0;
+  if (atrasadas > 0) {
+    lista.push({
+      id: 'atividades-atrasadas',
+      tipo: 'atividade_atrasada',
+      titulo: `${atrasadas} atividade(s) atrasada(s)`,
+      descricao: 'Follow-ups e tarefas com vencimento passado.',
+      link: '/app/agenda?atrasadas=1',
+      gravidade: 'alerta',
+    });
+  } else {
+    const pendentes = m.value?.atividades.pendentes ?? 0;
+    if (pendentes > 0) {
+      lista.push({
+        id: 'atividades-pendentes',
+        tipo: 'info',
+        titulo: `${pendentes} atividade(s) pendente(s)`,
+        descricao: 'Abra a agenda para priorizar o dia.',
+        link: '/app/agenda',
+        gravidade: 'info',
+      });
+    }
+  }
   const paradas = m.value?.oportunidades.paradas ?? 0;
   if (paradas > 0) {
     lista.push({
       id: 'oportunidades-paradas',
       tipo: 'oportunidade_parada',
       titulo: `${paradas} negócio(s) parado(s)`,
-      descricao: 'Sem movimentação há mais de 7 dias.',
-      link: '/app/pipeline',
+      descricao: 'Sem movimentação há mais de 7 dias. Follow-ups na agenda.',
+      link: '/app/agenda',
       gravidade: 'info',
     });
   }
@@ -150,6 +174,8 @@ const corGravidade: Record<string, string> = {
       </div>
     </header>
 
+    <ChecklistPosOnboarding />
+
     <EstadoErro
       v-if="metricasQuery.isError.value"
       :erro="metricasQuery.error.value"
@@ -159,7 +185,7 @@ const corGravidade: Record<string, string> = {
     <template v-else>
       <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <CartaoMetrica
-          rotulo="Novas oportunidades"
+          rotulo="Novos negócios"
           :valor="formatarNumero(m?.oportunidades.novasNoPeriodo)"
           :icone="TrendingUp"
           :ajuda="m ? `${formatarNumero(m.contatos.novosNoPeriodo)} pessoas novas` : undefined"
@@ -192,12 +218,12 @@ const corGravidade: Record<string, string> = {
       <div class="grid gap-6 lg:grid-cols-3">
         <Card class="lg:col-span-2">
           <CardHeader class="flex-row items-center justify-between">
-            <CardTitle>Oportunidades por etapa</CardTitle>
+            <CardTitle>Negócios por etapa</CardTitle>
             <RouterLink
               to="/app/pipeline"
               class="flex items-center gap-1 text-sm text-dourado-hover hover:underline"
             >
-              Ver pipeline <ChevronRight class="size-4" />
+              Ver negócios <ChevronRight class="size-4" />
             </RouterLink>
           </CardHeader>
           <CardContent>

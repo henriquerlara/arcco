@@ -4,11 +4,13 @@ import {
   atualizarObraSchema,
   paginacaoQuerySchema,
   vincularContatoObraSchema,
+  PerfilUsuario,
 } from '@arcco/contratos';
 import type { z } from 'zod';
 import { ObrasService } from './obras.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { EmpresaAtual } from '../../common/decorators/empresa-atual.decorator';
+import { Perfis } from '../../common/decorators/perfis.decorator';
 
 type CriarObraInput = z.infer<typeof criarObraSchema>;
 
@@ -20,8 +22,9 @@ export class ObrasController {
   listar(
     @EmpresaAtual() empresaId: string,
     @Query(new ZodValidationPipe(paginacaoQuerySchema)) query: z.infer<typeof paginacaoQuerySchema>,
+    @Query('status') status?: string,
   ) {
-    return this.servico.listar(empresaId, query);
+    return this.servico.listar(empresaId, { ...query, status });
   }
 
   @Get(':id')
@@ -46,6 +49,7 @@ export class ObrasController {
     return this.servico.atualizar(empresaId, id, dto);
   }
 
+  @Perfis(PerfilUsuario.PROPRIETARIO, PerfilUsuario.GESTOR, PerfilUsuario.VENDEDOR)
   @Delete(':id')
   remover(@EmpresaAtual() empresaId: string, @Param('id') id: string) {
     return this.servico.remover(empresaId, id);
@@ -61,6 +65,7 @@ export class ObrasController {
     return this.servico.vincularContato(empresaId, id, dto);
   }
 
+  @Perfis(PerfilUsuario.PROPRIETARIO, PerfilUsuario.GESTOR, PerfilUsuario.VENDEDOR)
   @Delete(':id/contatos/:vinculoId')
   desvincular(
     @EmpresaAtual() empresaId: string,

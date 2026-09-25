@@ -38,9 +38,6 @@ importers:
       '@fastify/multipart':
         specifier: ^8.3.0
         version: 8.3.1
-      '@fastify/static':
-        specifier: ^7.0.4
-        version: 7.0.4
       '@nestjs/common':
         specifier: ^10.4.15
         version: 10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -156,9 +153,6 @@ importers:
       '@tanstack/vue-query':
         specifier: ^5.62.0
         version: 5.101.2(vue@3.5.40(typescript@5.9.3))
-      '@tanstack/vue-table':
-        specifier: ^8.21.0
-        version: 8.21.3(vue@3.5.40(typescript@5.9.3))
       '@vee-validate/zod':
         specifier: ^4.15.0
         version: 4.15.1(vue@3.5.40(typescript@5.9.3))(zod@3.25.76)
@@ -1969,10 +1963,6 @@ packages:
   '@tanstack/query-core@5.101.2':
     resolution: {integrity: sha512-hH5MLoJhF7KaIGd7q3xTXGXvslI+GYlM1Z/35aSHHWaCJWB7XvTSHYuV3eM7tw+aE0mT/xMro4M4Q9rCGHT0lw==}
 
-  '@tanstack/table-core@8.21.3':
-    resolution: {integrity: sha512-ldZXEhOBb8Is7xLs01fR3YEc3DERiz5silj8tnGkFZytt1abEvl/GhUmCE0PMLaMPTa3Jk4HbKmRlHmu+gCftg==}
-    engines: {node: '>=12'}
-
   '@tanstack/virtual-core@3.17.4':
     resolution: {integrity: sha512-nGm5KteqxasUdThLc2izl6dHUqLv0LQj7Nuyo5gYalTPf/U8a9ermvsl7reT+6ioBW1l8WfpP/mcU338nLXpqw==}
 
@@ -1984,12 +1974,6 @@ packages:
     peerDependenciesMeta:
       '@vue/composition-api':
         optional: true
-
-  '@tanstack/vue-table@8.21.3':
-    resolution: {integrity: sha512-rusRyd77c5tDPloPskctMyPLFEQUeBzxdQ+2Eow4F7gDPlPOB1UnnhzfpdvqZ8ZyX2rRNGmqNnQWm87OI2OQPw==}
-    engines: {node: '>=12'}
-    peerDependencies:
-      vue: '>=3.2'
 
   '@tanstack/vue-virtual@3.13.32':
     resolution: {integrity: sha512-E8OCutx7QnwZdvpJijz0Q2PHsYDWBWjnGr3TvgWiqxTU35jB1kVhtkd93scRV7tTFuId2tg3x2iFiw+IE4evjQ==}
@@ -4863,7 +4847,8 @@ snapshots:
   '@esbuild/win32-x64@0.28.1':
     optional: true
 
-  '@fastify/accept-negotiator@1.1.0': {}
+  '@fastify/accept-negotiator@1.1.0':
+    optional: true
 
   '@fastify/ajv-compiler@3.6.0':
     dependencies:
@@ -4930,6 +4915,7 @@ snapshots:
       fast-decode-uri-component: 1.0.1
       http-errors: 2.0.0
       mime: 3.0.0
+    optional: true
 
   '@fastify/static@7.0.4':
     dependencies:
@@ -4939,6 +4925,7 @@ snapshots:
       fastify-plugin: 4.5.1
       fastq: 1.20.1
       glob: 10.5.0
+    optional: true
 
   '@floating-ui/core@1.8.0':
     dependencies:
@@ -5025,7 +5012,8 @@ snapshots:
 
   '@lukeed/csprng@1.1.0': {}
 
-  '@lukeed/ms@2.0.2': {}
+  '@lukeed/ms@2.0.2':
+    optional: true
 
   '@nestjs/cli@10.4.9(@swc/core@1.15.43(@swc/helpers@0.5.23))':
     dependencies:
@@ -6271,8 +6259,6 @@ snapshots:
 
   '@tanstack/query-core@5.101.2': {}
 
-  '@tanstack/table-core@8.21.3': {}
-
   '@tanstack/virtual-core@3.17.4': {}
 
   '@tanstack/vue-query@5.101.2(vue@3.5.40(typescript@5.9.3))':
@@ -6282,11 +6268,6 @@ snapshots:
       '@vue/devtools-api': 6.6.4
       vue: 3.5.40(typescript@5.9.3)
       vue-demi: 0.14.10(vue@3.5.40(typescript@5.9.3))
-
-  '@tanstack/vue-table@8.21.3(vue@3.5.40(typescript@5.9.3))':
-    dependencies:
-      '@tanstack/table-core': 8.21.3
-      vue: 3.5.40(typescript@5.9.3)
 
   '@tanstack/vue-virtual@3.13.32(vue@3.5.40(typescript@5.9.3))':
     dependencies:
@@ -6983,6 +6964,7 @@ snapshots:
   content-disposition@0.5.4:
     dependencies:
       safe-buffer: 5.2.1
+    optional: true
 
   cookie-signature@1.2.2: {}
 
@@ -7047,7 +7029,8 @@ snapshots:
 
   delayed-stream@1.0.0: {}
 
-  depd@2.0.0: {}
+  depd@2.0.0:
+    optional: true
 
   destr@2.0.5: {}
 
@@ -7210,7 +7193,8 @@ snapshots:
 
   escalade@3.2.0: {}
 
-  escape-html@1.0.3: {}
+  escape-html@1.0.3:
+    optional: true
 
   escape-string-regexp@1.0.5: {}
 
@@ -7549,6 +7533,7 @@ snapshots:
       setprototypeof: 1.2.0
       statuses: 2.0.1
       toidentifier: 1.0.1
+    optional: true
 
   https-proxy-agent@7.0.6:
     dependencies:
@@ -7788,7 +7773,8 @@ snapshots:
     dependencies:
       mime-db: 1.52.0
 
-  mime@3.0.0: {}
+  mime@3.0.0:
+    optional: true
 
   mimic-fn@2.1.0: {}
 
@@ -8288,7 +8274,8 @@ snapshots:
       gopd: 1.2.0
       has-property-descriptors: 1.0.2
 
-  setprototypeof@1.2.0: {}
+  setprototypeof@1.2.0:
+    optional: true
 
   shebang-command@2.0.0:
     dependencies:
@@ -8325,7 +8312,8 @@ snapshots:
 
   stackback@0.0.2: {}
 
-  statuses@2.0.1: {}
+  statuses@2.0.1:
+    optional: true
 
   std-env@3.10.0: {}
 
@@ -8479,7 +8467,8 @@ snapshots:
 
   toad-cache@3.7.4: {}
 
-  toidentifier@1.0.1: {}
+  toidentifier@1.0.1:
+    optional: true
 
   token-types@6.1.2:
     dependencies:

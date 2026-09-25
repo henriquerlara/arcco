@@ -1,15 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { configuracoesEmpresaSchema, type ConfiguracoesEmpresa } from '@arcco/contratos';
-import { PrismaService } from '../../database/prisma.service';
+import { Prisma } from '../../database/generated/platform';
+import { PlatformPrismaService } from '../../database/platform-prisma.service';
 import { Erros } from '../../common/erros/erros';
 import type { AtualizarEmpresaInput, AtualizarOnboardingInput } from './empresas.schemas';
 
 @Injectable()
 export class EmpresasService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PlatformPrismaService) {}
+
+  buscar(empresaId: string) {
+    return this.prisma.empresa.findUnique({ where: { id: empresaId } });
+  }
 
   async obter(empresaId: string) {
-    const empresa = await this.prisma.empresa.findUnique({ where: { id: empresaId } });
+    const empresa = await this.buscar(empresaId);
     if (!empresa) throw Erros.naoEncontrado('EMPRESA_NAO_ENCONTRADA', 'Empresa nao encontrada');
     return empresa;
   }
@@ -26,6 +31,14 @@ export class EmpresasService {
         cidade: dto.cidade,
         estado: dto.estado,
         logoArquivoId: dto.logoArquivoId,
+        cnpj: dto.cnpj === undefined ? undefined : dto.cnpj?.replace(/\D/g, '') || null,
+        inscricaoEstadual: dto.inscricaoEstadual,
+        enderecoFiscal:
+          dto.enderecoFiscal === undefined
+            ? undefined
+            : dto.enderecoFiscal === null
+              ? Prisma.DbNull
+              : (dto.enderecoFiscal as object),
       },
     });
   }
@@ -39,6 +52,7 @@ export class EmpresasService {
       chatbot: dto.chatbot ? { ...atual.chatbot, ...dto.chatbot } : atual.chatbot,
       onboardingConcluido:
         dto.onboardingConcluido ?? atual.onboardingConcluido ?? false,
+      diasFollowUpOrcamento: atual.diasFollowUpOrcamento ?? 3,
     };
 
     return this.prisma.empresa.update({

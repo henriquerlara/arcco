@@ -37,7 +37,10 @@ export class ConversasService {
     const [dados, total] = await this.prisma.$transaction([
       this.prisma.conversa.findMany({
         where,
-        include: { contato: { select: { id: true, nome: true } } },
+        include: {
+          contato: { select: { id: true, nome: true } },
+          conexao: { select: { id: true, provedor: true, modoConexao: true, isTestConnection: true } },
+        },
         orderBy: { atualizadoEm: 'desc' },
         skip: (opcoes.pagina - 1) * opcoes.porPagina,
         take: opcoes.porPagina,
@@ -51,7 +54,18 @@ export class ConversasService {
   async obter(empresaId: string, id: string) {
     const conversa = await this.prisma.conversa.findFirst({
       where: { id, empresaId },
-      include: { contato: true },
+      include: {
+        contato: true,
+        conexao: {
+          select: {
+            id: true,
+            provedor: true,
+            modoConexao: true,
+            numero: true,
+            isTestConnection: true,
+          },
+        },
+      },
     });
     if (!conversa) throw Erros.naoEncontrado('CONVERSA_NAO_ENCONTRADA', 'Conversa nao encontrada');
     const oportunidade = conversa.oportunidadeId
@@ -134,6 +148,11 @@ export class ConversasService {
           modo: ModoAtendimento.BOT,
           estadoBot: { dadosColetados: {}, tentativas: 0 } as unknown as object,
         },
+      });
+    } else if (entrada.conexaoId && conversa.conexaoId !== entrada.conexaoId) {
+      conversa = await this.prisma.conversa.update({
+        where: { id: conversa.id },
+        data: { conexaoId: entrada.conexaoId },
       });
     }
 

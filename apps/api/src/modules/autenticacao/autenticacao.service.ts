@@ -8,6 +8,8 @@ import {
   type SegmentoEmpresa,
   type TrocarSenhaInput,
 } from '@arcco/contratos';
+import { BANCO_EMPRESA_UNICO } from '../../database/banco-empresa';
+import { PlatformPrismaService } from '../../database/platform-prisma.service';
 import { PrismaService } from '../../database/prisma.service';
 import { JwtService, COOKIE_REFRESH } from '../../common/auth/jwt.service';
 import { SenhaService } from '../../common/auth/senha.service';
@@ -23,6 +25,7 @@ export class AutenticacaoService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly platform: PlatformPrismaService,
     private readonly jwt: JwtService,
     private readonly senha: SenhaService,
   ) {}
@@ -31,7 +34,7 @@ export class AutenticacaoService {
     this.limiterCadastrar.consumir(ip);
 
     const emailNormalizado = dto.email.trim().toLowerCase();
-    const existente = await this.prisma.usuario.findUnique({ where: { email: emailNormalizado } });
+    const existente = await this.platform.usuario.findUnique({ where: { email: emailNormalizado } });
     if (existente) {
       throw Erros.conflito('EMAIL_EM_USO', 'Este e-mail ja esta cadastrado');
     }
@@ -40,7 +43,7 @@ export class AutenticacaoService {
     const template = templatePorSegmento(dto.segmento as SegmentoEmpresa);
     const config = configuracoesEmpresaPadrao();
 
-    const { empresa, usuario } = await this.prisma.$transaction(async (tx) => {
+    const { empresa, usuario } = await this.platform.$transaction(async (tx) => {
       const empresa = await tx.empresa.create({
         data: {
           nome: dto.nomeEmpresa,
@@ -50,6 +53,9 @@ export class AutenticacaoService {
           cidade: dto.cidade ?? null,
           estado: dto.estado ?? null,
           configuracoes: config as unknown as object,
+          databaseHost: BANCO_EMPRESA_UNICO.host,
+          databasePort: BANCO_EMPRESA_UNICO.port,
+          databaseName: BANCO_EMPRESA_UNICO.name,
         },
       });
 
@@ -64,47 +70,47 @@ export class AutenticacaoService {
         },
       });
 
-      if (template.categorias.length) {
-        await tx.categoria.createMany({
-          data: template.categorias.map((c) => ({
-            empresaId: empresa.id,
-            nome: c.nome,
-            descricao: c.descricao ?? null,
-            ordem: c.ordem,
-          })),
-        });
-      }
-
-      await tx.etapaFunil.createMany({
-        data: template.etapas.map((e) => ({
-          empresaId: empresa.id,
-          nome: e.nome,
-          ordem: e.ordem,
-          tipo: e.tipo,
-          chaveSistema: e.chaveSistema,
-        })),
-      });
-
-      if (template.campos.length) {
-        await tx.campoPersonalizado.createMany({
-          data: template.campos.map((campo, i) => ({
-            empresaId: empresa.id,
-            entidade: campo.entidade,
-            chave: campo.chave,
-            rotulo: campo.rotulo,
-            tipo: campo.tipo,
-            obrigatorio: campo.obrigatorio ?? false,
-            opcoes: campo.opcoes ?? [],
-            ordem: campo.ordem ?? i,
-            usarNoChatbot: campo.usarNoChatbot ?? false,
-            textoPergunta: campo.textoPergunta ?? null,
-            mostrarNoResumo: campo.mostrarNoResumo ?? true,
-          })),
-        });
-      }
-
       return { empresa, usuario };
     });
+
+    if (template.categorias.length) {
+      await this.prisma.categoria.createMany({
+        data: template.categorias.map((c) => ({
+          empresaId: empresa.id,
+          nome: c.nome,
+          descricao: c.descricao ?? null,
+          ordem: c.ordem,
+        })),
+      });
+    }
+
+    await this.prisma.etapaFunil.createMany({
+      data: template.etapas.map((e) => ({
+        empresaId: empresa.id,
+        nome: e.nome,
+        ordem: e.ordem,
+        tipo: e.tipo,
+        chaveSistema: e.chaveSistema,
+      })),
+    });
+
+    if (template.campos.length) {
+      await this.prisma.campoPersonalizado.createMany({
+        data: template.campos.map((campo, i) => ({
+          empresaId: empresa.id,
+          entidade: campo.entidade,
+          chave: campo.chave,
+          rotulo: campo.rotulo,
+          tipo: campo.tipo,
+          obrigatorio: campo.obrigatorio ?? false,
+          opcoes: campo.opcoes ?? [],
+          ordem: campo.ordem ?? i,
+          usarNoChatbot: campo.usarNoChatbot ?? false,
+          textoPergunta: campo.textoPergunta ?? null,
+          mostrarNoResumo: campo.mostrarNoResumo ?? true,
+        })),
+      });
+    }
 
     await this.emitir(resposta, usuario);
     this.limiterCadastrar.reiniciar(ip);
@@ -119,18 +125,18 @@ export class AutenticacaoService {
     this.limiterEntrar.consumir(ip);
 
     const email = dto.email.trim().toLowerCase();
-    const usuario = await this.prisma.usuario.findUnique({ where: { email } });
+    const usuario = await this.platform.usuario.findUnique({ where: { email } });
     if (!usuario || !usuario.ativo) throw Erros.credenciaisInvalidas();
 
     const ok = await this.senha.verificar(usuario.senhaHash, dto.senha);
     if (!ok) throw Erros.credenciaisInvalidas();
 
-    await this.prisma.usuario.update({
+    await this.platform.usuario.update({
       where: { id: usuario.id },
       data: { ultimoAcessoEm: new Date() },
     });
 
-    const empresa = await this.prisma.empresa.findUniqueOrThrow({
+    const empresa = await this.platform.empresa.findUniqueOrThrow({
       where: { id: usuario.empresaId },
     });
 
@@ -149,7 +155,7 @@ export class AutenticacaoService {
     if (!token) throw Erros.naoAutenticado();
 
     const conteudo = await this.jwt.verificarRefreshToken(token);
-    const usuario = await this.prisma.usuario.findUnique({ where: { id: conteudo.sub } });
+    const usuario = await this.platform.usuario.findUnique({ where: { id: conteudo.sub } });
     if (!usuario || !usuario.ativo) throw Erros.naoAutenticado();
     if (usuario.versaoSessao !== conteudo.versaoSessao) {
       throw Erros.naoAutenticado('Sessao encerrada. Entre novamente');
@@ -160,7 +166,7 @@ export class AutenticacaoService {
   }
 
   async sair(usuario: UsuarioAutenticado, resposta: FastifyReply) {
-    await this.prisma.usuario.update({
+    await this.platform.usuario.update({
       where: { id: usuario.id },
       data: { versaoSessao: { increment: 1 } },
     });
@@ -169,7 +175,7 @@ export class AutenticacaoService {
   }
 
   async eu(usuario: UsuarioAutenticado) {
-    const registro = await this.prisma.usuario.findUnique({
+    const registro = await this.platform.usuario.findUnique({
       where: { id: usuario.id },
       include: { empresa: true },
     });
@@ -181,14 +187,14 @@ export class AutenticacaoService {
   }
 
   async trocarSenha(usuario: UsuarioAutenticado, dto: TrocarSenhaInput, resposta: FastifyReply) {
-    const registro = await this.prisma.usuario.findUnique({ where: { id: usuario.id } });
+    const registro = await this.platform.usuario.findUnique({ where: { id: usuario.id } });
     if (!registro) throw Erros.naoAutenticado();
 
     const ok = await this.senha.verificar(registro.senhaHash, dto.senhaAtual);
     if (!ok) throw Erros.invalido('SENHA_ATUAL_INVALIDA', 'A senha atual esta incorreta');
 
     const novoHash = await this.senha.hash(dto.senhaNova);
-    const atualizado = await this.prisma.usuario.update({
+    const atualizado = await this.platform.usuario.update({
       where: { id: usuario.id },
       data: {
         senhaHash: novoHash,

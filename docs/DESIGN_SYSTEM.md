@@ -77,15 +77,15 @@ A marca usa uma classe utilitária `fonte-marca` (serifada), com `tracking` ampl
 
 Componentes reutilizáveis (estilo shadcn-vue, com `class-variance-authority` e utilitário `cn`):
 
-`Button`, `Input`, `Textarea`, `Label`, `Select`, `Checkbox`, `Switch`, `Badge`, `Separator`, `Tabs`, `Dialog`, `Sheet`, `DropdownMenu` e a família de `Card` (`Card`, `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, `CardFooter`). Exportados por `components/ui/index.ts`.
+`Button`, `Input`, `Textarea`, `Label`, `Select`, `Checkbox`, `Switch`, `Badge`, `Tabs`, `Dialog` e a família de `Card` (`Card`, `CardHeader`, `CardTitle`, `CardContent`).
 
 ### Compartilhados — `components/compartilhados/`
 
-Blocos de UI de produto: `TabelaDados`, `Paginacao`, `BadgeStatus`, `CartaoMetrica`, `EstadoVazio`, `EstadoErro`, `Skeleton`, `ModalConfirmacao`, `DrawerDetalhes`, `SeletorPeriodo`.
+Blocos de UI de produto: `TabelaDados`, `Paginacao`, `BadgeStatus`, `CartaoMetrica`, `EstadoVazio`, `EstadoErro`, `Skeleton`, `ModalConfirmacao`, `SeletorPeriodo`.
 
 ### Formulários — `components/formularios/`
 
-`CampoPersonalizado` e `FormularioCamposPersonalizados` (renderizam campos dinâmicos por tipo) e seletores: `SeletorContato`, `SeletorObra`, `SeletorCategoria`, `SeletorUsuario`.
+`CampoPersonalizado` e `FormularioCamposPersonalizados` (renderizam campos dinâmicos por tipo) e seletores: `SeletorContato`, `SeletorCategoria`, `SeletorUsuario`.
 
 ### Layout — `components/layout/` e `layouts/`
 
@@ -94,7 +94,6 @@ Blocos de UI de produto: `TabelaDados`, `Paginacao`, `BadgeStatus`, `CartaoMetri
 ### Marca — `components/marca/`
 
 - `MarcaArcco.vue` — logo (símbolo SVG "dois arcos" + wordmark), com props `tema` (`claro`/`escuro`), `tamanho` (`sm/md/lg/xl`), `subtitulo` e `somenteSimbolo`.
-- `ArcosMarcaAgua.vue` — arte decorativa (marca d'água dos arcos).
 
 ---
 

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PerfilUsuario, type CriarUsuarioInput } from '@arcco/contratos';
-import { PrismaService } from '../../database/prisma.service';
+import { PlatformPrismaService } from '../../database/platform-prisma.service';
 import { SenhaService } from '../../common/auth/senha.service';
 import { Erros } from '../../common/erros/erros';
 import type { AtualizarUsuarioInput, RedefinirSenhaInput } from './usuarios.schemas';
@@ -20,7 +20,7 @@ const CAMPOS_PUBLICOS = {
 @Injectable()
 export class UsuariosService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma: PlatformPrismaService,
     private readonly senha: SenhaService,
   ) {}
 

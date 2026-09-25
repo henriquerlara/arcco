@@ -23,11 +23,18 @@ import type { MovimentacaoEstoque, TipoMovimentacaoEstoque } from '@/types';
 import { servicoProdutos } from '@/services';
 import { useNotificacao } from '@/composables/useNotificacao';
 import { formatarNumero, formatarDataHora, formatarMoeda } from '@/composables/formatadores';
+import { useAutenticacaoStore } from '@/stores/autenticacao';
+import { PerfilUsuario } from '@arcco/contratos';
 
 const rota = useRoute();
 const id = computed(() => String(rota.params.id));
 const queryClient = useQueryClient();
+const auth = useAutenticacaoStore();
 const { notificarErro, sucesso } = useNotificacao();
+
+const podeEditar = computed(() =>
+  auth.temPerfil(PerfilUsuario.PROPRIETARIO, PerfilUsuario.GESTOR, PerfilUsuario.VENDEDOR),
+);
 
 const { data: produto, isLoading, isError, error, refetch } = useQuery({
   queryKey: computed(() => ['estoque', 'produto', id.value]),
@@ -160,7 +167,7 @@ async function confirmarAjuste() {
               <dd>{{ formatarMoeda(produto.precoVenda) }}</dd>
             </div>
           </dl>
-          <div v-if="produto.controlaEstoque" class="mt-4 flex flex-wrap gap-2">
+          <div v-if="produto.controlaEstoque && podeEditar" class="mt-4 flex flex-wrap gap-2">
             <Button tamanho="sm" @click="abrirEntrada">
               <PackagePlus class="size-4" /> Entrada
             </Button>

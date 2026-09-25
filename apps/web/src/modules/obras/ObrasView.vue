@@ -40,10 +40,10 @@ const { data, isLoading, isError, error, refetch } = useQuery({
 });
 
 const colunas: ColunaTabela[] = [
-  { chave: 'nome', rotulo: 'Obra' },
+  { chave: 'nome', rotulo: 'Projeto' },
   { chave: 'status', rotulo: 'Status' },
   { chave: 'local', rotulo: 'Localização' },
-  { chave: 'oportunidades', rotulo: 'Oport.', alinhamento: 'centro' },
+  { chave: 'oportunidades', rotulo: 'Negócios', alinhamento: 'centro' },
 ];
 
 const linhas = computed(() => data.value?.dados ?? []);
@@ -55,10 +55,10 @@ function abrir(obra: Obra) {
 
 <template>
   <div class="space-y-5">
-    <CabecalhoPagina titulo="Obras" descricao="Empreendimentos e projetos que sua empresa atende.">
+    <CabecalhoPagina titulo="Projetos" descricao="Empreendimentos e projetos que sua empresa atende.">
       <template #acoes>
         <Button @click="formAberto = true">
-          <Plus class="size-4" /> Nova obra
+          <Plus class="size-4" /> Novo projeto
         </Button>
       </template>
     </CabecalhoPagina>
@@ -66,7 +66,7 @@ function abrir(obra: Obra) {
     <div class="flex flex-col gap-3 sm:flex-row">
       <div class="relative flex-1">
         <Search class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-texto-secundario" />
-        <Input v-model="busca" placeholder="Buscar obra por nome ou cidade" class="pl-9" />
+        <Input v-model="busca" placeholder="Buscar projeto por nome ou cidade" class="pl-9" />
       </div>
       <Select v-model="status" :opcoes="opcoesStatus" class="sm:w-52" />
     </div>
@@ -75,12 +75,12 @@ function abrir(obra: Obra) {
 
     <EstadoVazio
       v-else-if="!isLoading && linhas.length === 0"
-      titulo="Nenhuma obra cadastrada"
-      descricao="Cadastre a primeira obra para vincular contatos e oportunidades."
+      titulo="Nenhum projeto cadastrado"
+      descricao="Cadastre o primeiro projeto para vincular pessoas e negócios."
       :icone="Building2"
     >
       <template #acao>
-        <Button @click="formAberto = true"><Plus class="size-4" /> Nova obra</Button>
+        <Button @click="formAberto = true"><Plus class="size-4" /> Novo projeto</Button>
       </template>
     </EstadoVazio>
 

@@ -1,0 +1,3 @@
+# Gerado para o banco local. As migrations PostgreSQL anteriores foram preservadas
+# em ../migrations-postgresql-legacy.
+provider = "sqlite"

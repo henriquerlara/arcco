@@ -16,7 +16,7 @@ import Textarea from '@/components/ui/Textarea.vue';
 import type { Orcamento, Produto } from '@/types';
 import { servicoArquivos, servicoOrcamentos, servicoProdutos } from '@/services';
 import { useNotificacao } from '@/composables/useNotificacao';
-import { formatarMoeda } from '@/composables/formatadores';
+import { formatarMoeda, parsearMoeda } from '@/composables/formatadores';
 
 const props = defineProps<{
   oportunidadeId: string;
@@ -291,7 +291,7 @@ watch(
       </div>
 
       <p v-if="vigente" class="text-xs text-texto-secundario">
-        No Fechado, a baixa usa só o orçamento vigente (último aceito/enviado).
+        No Fechado, o último orçamento montado vira o final (WhatsApp opcional) e baixa o estoque.
       </p>
     </CardContent>
   </Card>
@@ -326,7 +326,12 @@ watch(
         </div>
         <div class="sm:col-span-3 space-y-1">
           <Label>Preço unit.</Label>
-          <Input v-model.number="linha.precoUnitario" type="number" min="0" step="0.01" />
+          <Input
+            :model-value="linha.precoUnitario"
+            mascara="moeda"
+            placeholder="0,00"
+            @update:model-value="(v) => (linha.precoUnitario = parsearMoeda(String(v)) ?? 0)"
+          />
         </div>
         <div class="sm:col-span-2 flex items-end text-sm text-texto">
           {{ formatarMoeda(linha.quantidade * linha.precoUnitario) }}
@@ -340,7 +345,12 @@ watch(
       <div class="grid gap-3 sm:grid-cols-2">
         <div class="space-y-1.5">
           <Label>Desconto (R$)</Label>
-          <Input v-model.number="descontoValor" type="number" min="0" step="0.01" />
+          <Input
+            :model-value="descontoValor"
+            mascara="moeda"
+            placeholder="0,00"
+            @update:model-value="(v) => (descontoValor = parsearMoeda(String(v)) ?? 0)"
+          />
         </div>
         <div class="flex items-end justify-end text-lg font-semibold text-texto">
           Total {{ formatarMoeda(totalPreview) }}

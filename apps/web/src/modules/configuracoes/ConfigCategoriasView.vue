@@ -101,7 +101,7 @@ async function excluir() {
 
 <template>
   <div class="space-y-5">
-    <CabecalhoPagina titulo="Configurações" descricao="Gerencie os dados e o funcionamento da sua conta.">
+    <CabecalhoPagina titulo="Categorias" descricao="Linhas de atuação usadas para organizar os negócios.">
       <template #acoes>
         <Button @click="abrirNovo"><Plus class="size-4" /> Nova categoria</Button>
       </template>
@@ -115,7 +115,7 @@ async function excluir() {
     <EstadoVazio
       v-else-if="linhas.length === 0"
       titulo="Nenhuma categoria"
-      descricao="Categorias organizam as oportunidades por linha de negócio."
+      descricao="Categorias organizam os negócios por linha de atuação."
     >
       <template #acao><Button @click="abrirNovo"><Plus class="size-4" /> Nova categoria</Button></template>
     </EstadoVazio>
@@ -164,7 +164,7 @@ async function excluir() {
     <ModalConfirmacao
       v-model="confirmar"
       titulo="Excluir categoria?"
-      descricao="Oportunidades associadas ficarão sem categoria."
+      descricao="Negócios associados ficarão sem categoria."
       texto-confirmar="Excluir"
       perigo
       :carregando="excluindo"

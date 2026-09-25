@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   criarRespostaPaginada,
   EntidadeCampoPersonalizado,
+  StatusObra,
   type criarObraSchema,
   type paginacaoQuerySchema,
   type vincularContatoObraSchema,
@@ -24,8 +25,11 @@ export class ObrasService {
     private readonly campos: CamposPersonalizadosService,
   ) {}
 
-  async listar(empresaId: string, query: PaginacaoQuery) {
+  async listar(empresaId: string, query: PaginacaoQuery & { status?: string }) {
     const where: Prisma.ObraWhereInput = { empresaId };
+    if (query.status && Object.values(StatusObra).includes(query.status as StatusObra)) {
+      where.status = query.status as StatusObra;
+    }
     if (query.busca) {
       where.OR = [
         { nome: { contains: query.busca } },
@@ -37,6 +41,7 @@ export class ObrasService {
     const [dados, total] = await this.prisma.$transaction([
       this.prisma.obra.findMany({
         where,
+        include: { _count: { select: { oportunidades: true } } },
         orderBy: { criadoEm: 'desc' },
         skip: (query.pagina - 1) * query.porPagina,
         take: query.porPagina,
@@ -44,16 +49,34 @@ export class ObrasService {
       this.prisma.obra.count({ where }),
     ]);
 
-    return criarRespostaPaginada(dados, total, query.pagina, query.porPagina);
+    const mapeados = dados.map(({ _count, ...obra }) => ({
+      ...obra,
+      totalOportunidades: _count.oportunidades,
+    }));
+
+    return criarRespostaPaginada(mapeados, total, query.pagina, query.porPagina);
   }
 
   async obter(empresaId: string, id: string) {
     const obra = await this.prisma.obra.findFirst({
       where: { id, empresaId },
-      include: { contatosObras: { include: { contato: true } } },
+      include: {
+        contatosObras: { include: { contato: true } },
+        _count: { select: { oportunidades: true } },
+      },
     });
     if (!obra) throw Erros.naoEncontrado('OBRA_NAO_ENCONTRADA', 'Obra nao encontrada');
-    return obra;
+
+    const { contatosObras, _count, ...resto } = obra;
+    return {
+      ...resto,
+      contatos: contatosObras.map((v) => ({
+        id: v.id,
+        papel: v.papel,
+        contato: v.contato,
+      })),
+      totalOportunidades: _count.oportunidades,
+    };
   }
 
   async criar(empresaId: string, dto: CriarObraInput) {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { cn } from '@/composables/cn';
+import { aplicarMascara, type TipoMascara } from '@/composables/formatadores';
 
 const props = defineProps<{
   modelValue?: string | number | null;
@@ -11,6 +12,7 @@ const props = defineProps<{
   class?: string;
   id?: string;
   autocomplete?: string;
+  mascara?: TipoMascara;
 }>();
 
 const emit = defineEmits<{
@@ -25,8 +27,21 @@ const classes = computed(() =>
   ),
 );
 
+const exibido = computed(() => {
+  const bruto = props.modelValue ?? '';
+  return props.mascara ? aplicarMascara(props.mascara, bruto) : bruto;
+});
+
+const modo = computed(() => {
+  if (props.mascara === 'uf') return 'text';
+  if (props.mascara === 'moeda') return 'decimal';
+  if (props.mascara) return 'numeric';
+  return undefined;
+});
+
 function aoDigitar(evento: Event) {
-  emit('update:modelValue', (evento.target as HTMLInputElement).value);
+  const bruto = (evento.target as HTMLInputElement).value;
+  emit('update:modelValue', props.mascara ? aplicarMascara(props.mascara, bruto) : bruto);
 }
 </script>
 
@@ -34,10 +49,11 @@ function aoDigitar(evento: Event) {
   <input
     :id="id"
     :type="type ?? 'text'"
-    :value="modelValue ?? ''"
+    :value="exibido"
     :placeholder="placeholder"
     :disabled="disabled"
     :autocomplete="autocomplete"
+    :inputmode="modo"
     :aria-invalid="invalido || undefined"
     :class="classes"
     @input="aoDigitar"

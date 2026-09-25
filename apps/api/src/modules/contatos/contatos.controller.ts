@@ -3,12 +3,14 @@ import {
   criarContatoSchema,
   atualizarContatoSchema,
   paginacaoQuerySchema,
+  PerfilUsuario,
   type criarContatoSchema as CriarSchema,
 } from '@arcco/contratos';
 import type { z } from 'zod';
 import { ContatosService } from './contatos.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { EmpresaAtual } from '../../common/decorators/empresa-atual.decorator';
+import { Perfis } from '../../common/decorators/perfis.decorator';
 
 type CriarContatoInput = z.infer<typeof CriarSchema>;
 
@@ -20,8 +22,9 @@ export class ContatosController {
   listar(
     @EmpresaAtual() empresaId: string,
     @Query(new ZodValidationPipe(paginacaoQuerySchema)) query: z.infer<typeof paginacaoQuerySchema>,
+    @Query('tipo') tipo?: string,
   ) {
-    return this.servico.listar(empresaId, query);
+    return this.servico.listar(empresaId, { ...query, tipo });
   }
 
   @Get(':id')
@@ -46,6 +49,7 @@ export class ContatosController {
     return this.servico.atualizar(empresaId, id, dto);
   }
 
+  @Perfis(PerfilUsuario.PROPRIETARIO, PerfilUsuario.GESTOR, PerfilUsuario.VENDEDOR)
   @Delete(':id')
   remover(@EmpresaAtual() empresaId: string, @Param('id') id: string) {
     return this.servico.remover(empresaId, id);

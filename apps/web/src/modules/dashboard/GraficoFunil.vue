@@ -34,7 +34,7 @@ const opcao = computed<EChartsOption>(() => {
         const item = arr[0];
         if (!item) return '';
         const ponto = props.dados[item.dataIndex];
-        return `<strong>${item.name}</strong><br/>${item.value} oportunidade(s)<br/>${formatarMoeda(
+        return `<strong>${item.name}</strong><br/>${item.value} negócio(s)<br/>${formatarMoeda(
           ponto?.valor ?? 0,
         )}`;
       },
@@ -87,6 +87,6 @@ const opcao = computed<EChartsOption>(() => {
     v-else
     class="flex h-72 items-center justify-center text-sm text-texto-secundario"
   >
-    Sem oportunidades no funil.
+    Sem negócios no funil.
   </div>
 </template>

@@ -1,6 +1,13 @@
 import { z } from 'zod';
 
 const envSchema = z.object({
+  PLATFORM_DATABASE_URL: z
+    .string()
+    .default('postgresql://arcco:arcco@localhost:5432/platform_db'),
+  EMPRESA_DATABASE_URL: z
+    .string()
+    .default('postgresql://arcco:arcco@localhost:5432/db_empresa_arcco'),
+
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().default(3000),
   FRONTEND_URL: z.string().default('http://localhost:5173'),
@@ -10,11 +17,21 @@ const envSchema = z.object({
   JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
 
-  WHATSAPP_PROVIDER: z.enum(['mock', 'evolution']).default('mock'),
-  EVOLUTION_API_URL: z.string().optional().default(''),
-  EVOLUTION_API_KEY: z.string().optional().default(''),
-  EVOLUTION_WEBHOOK_SECRET: z.string().optional().default(''),
   API_PUBLIC_URL: z.string().default('http://localhost:3000'),
+
+  // Meta WhatsApp Cloud API (backend only — never expose to frontend)
+  META_WHATSAPP_ACCESS_TOKEN: z.string().optional().default(''),
+  META_WHATSAPP_PHONE_NUMBER_ID: z.string().optional().default(''),
+  META_WHATSAPP_WABA_ID: z.string().optional().default(''),
+  META_WHATSAPP_VERIFY_TOKEN: z.string().optional().default(''),
+  META_GRAPH_API_VERSION: z.string().default('v26.0'),
+  META_WHATSAPP_TEST_RECIPIENT: z.string().optional().default(''),
+  META_WHATSAPP_DISPLAY_PHONE: z.string().optional().default(''),
+
+  // Focus NFe (BACKEND ONLY)
+  FOCUS_NFE_TOKEN: z.string().optional().default(''),
+  FOCUS_NFE_ENV: z.enum(['homologacao', 'producao']).default('homologacao'),
+  FOCUS_NFE_REF_PREFIX: z.string().optional().default('arcco'),
 
   AI_PROVIDER: z.enum(['rules', 'openai']).default('rules'),
   OPENAI_API_KEY: z.string().optional().default(''),

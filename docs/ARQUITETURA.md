@@ -50,8 +50,11 @@ src/
     ├── conversas/          # /conversas
     ├── mensagens/          # /conversas/:conversaId/mensagens
     ├── chatbot/            # máquina de estados + orquestração
-    ├── whatsapp/           # /whatsapp, /webhooks (Evolution/mock)
+    ├── whatsapp/           # /whatsapp, webhook Meta Cloud API
     ├── arquivos/           # /arquivos (local/R2)
+    ├── produtos/           # /produtos e /produtos/estoque
+    ├── orcamentos/         # /orcamentos
+    ├── fiscal/             # notas fiscais + cliente Focus NFe
     └── ia/                 # provedor de intenção (rules/openai)
 ```
 
@@ -90,7 +93,7 @@ Fonte única de verdade dos contratos: enums (perfis, status, intenções), sche
 - **Autenticação stateless com cookies httpOnly** — access token curto + refresh token, com `versaoSessao` para invalidação.
 - **Guards globais** — `AuthGuard` e `PerfilGuard` aplicados a toda a API; rotas liberadas explicitamente com `@Publico()`.
 - **Chatbot como máquina de estados pura** — lógica determinística e testável (sem I/O), com efeitos colaterais executados pelo service.
-- **Provedores plugáveis** — WhatsApp (`mock`/`evolution`), IA (`rules`/`openai`) e armazenamento (`local`/`r2`) selecionados por variável de ambiente, permitindo rodar tudo offline.
+- **Provedores plugáveis** — WhatsApp (Meta Cloud API, com simulador local), IA (`rules`/`openai`) e armazenamento (`local`/`r2`) selecionados por variável de ambiente, permitindo rodar o restante offline.
 - **Frontend orientado a dados de servidor** — TanStack Query cuida de cache/refetch (inbox por polling), Pinia para estado de sessão/UI.
 
 ---
@@ -119,7 +122,8 @@ Fonte única de verdade dos contratos: enums (perfis, status, intenções), sche
 
 ## Integrações
 
-- **WhatsApp (Evolution API):** provider selecionado por `WHATSAPP_PROVIDER`. `EvolutionWhatsAppProvider` fala HTTP com a Evolution (enviar texto, conectar/QR, status, logout). Entrada por webhook `POST /api/webhooks/evolution` validando `x-webhook-secret`. Em `mock`, nada é enviado de verdade. Ver [`EVOLUTION_API.md`](EVOLUTION_API.md).
+- **WhatsApp (Meta Cloud API):** envio e recebimento pelo provedor oficial. Webhook público `POST /api/webhooks/meta/whatsapp`. O simulador local cobre o chatbot sem conta Meta.
+- **Nota fiscal (Focus NFe):** cliente HTTP em `fiscal/focus-nfe.client.ts`; a decisão de emitir fica em `NotasFiscaisService`. Webhook público `POST /api/webhooks/focus-nfe`. Sem token, a emissão segue em mock local.
 - **IA (OpenAI):** provider por `AI_PROVIDER`. `rules` usa regex/palavras-chave (offline, determinístico); `openai` usa o SDK e o modelo `OPENAI_MODEL`. Apenas classificação de intenção. Ver [`CHATBOT.md`](CHATBOT.md).
 - **Armazenamento (Cloudflare R2):** por `STORAGE_PROVIDER`. `local` grava em `LOCAL_STORAGE_PATH` e serve pela API; `r2` usa AWS SDK S3 + presigner contra o endpoint R2.
 - **Observabilidade (OpenTelemetry):** iniciada em `main.ts` antes do bootstrap; exporta via OTLP quando `OTEL_EXPORTER_OTLP_ENDPOINT` está definido.
@@ -131,9 +135,9 @@ Fonte única de verdade dos contratos: enums (perfis, status, intenções), sche
 ```
                           ┌───────────────────────────┐
         Cliente final     │        WhatsApp            │
-        (WhatsApp)  ─────▶ │  (Evolution API / mock)   │
+        (WhatsApp)  ─────▶ │  (Meta Cloud API / simulador) │
                           └────────────┬──────────────┘
-                                       │ webhook  POST /api/webhooks/evolution
+                                       │ webhook  POST /api/webhooks/meta/whatsapp
                                        ▼
 ┌──────────────┐   REST /api    ┌───────────────────────────────────────────┐
 │  apps/web    │ ─────────────▶ │                apps/api (NestJS/Fastify)   │

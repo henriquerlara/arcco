@@ -8,7 +8,9 @@ import {
   StatusConversa,
   StatusMensagem,
   TipoMensagem,
+  TipoAtividade,
 } from '@arcco/contratos';
+import { PlatformPrismaService } from '../../database/platform-prisma.service';
 import { PrismaService } from '../../database/prisma.service';
 import { Erros } from '../../common/erros/erros';
 import { ConversasService } from '../conversas/conversas.service';
@@ -17,12 +19,16 @@ import { ChatbotService } from '../chatbot/chatbot.service';
 import { OportunidadesService } from '../oportunidades/oportunidades.service';
 import { EventosService, TipoEvento } from '../eventos/eventos.service';
 import { ArquivosService } from '../arquivos/arquivos.service';
+import { AtividadesService } from '../atividades/atividades.service';
 import {
   WHATSAPP_PROVIDER,
+  type MenuInterativoEnvio,
   type OpcoesEnvioTexto,
   type WhatsAppProvider,
 } from './whatsapp.provider';
 import { FilaMensagensPorTelefone } from './mensagem.fila';
+import { MetaWhatsAppProvider } from './meta.provider';
+import { particionarRespostasBot } from '../chatbot/mensagens-ecolume';
 
 const TAMANHO_MAX_MIDIA_BYTES = 20 * 1024 * 1024;
 
@@ -41,7 +47,10 @@ export interface MensagemRecebidaEntrada {
   /** JID do chat onde o cliente escreveu (@lid) — respostas DEVEM ir aqui */
   destinoEnvio?: string;
   nome?: string | null;
+  /** Texto usado pelo chatbot / máquina de estados (ex.: "1") */
   texto: string;
+  /** Texto limpo para exibir no CRM (ex.: "Vendas"). Se ausente, usa `texto`. */
+  textoExibicao?: string;
   idExterno?: string | null;
   quoted?: OpcoesEnvioTexto['quoted'];
   /** Epoch ms da mensagem no WhatsApp (para ordenar a fila) */
@@ -56,33 +65,30 @@ export class WhatsAppService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly platform: PlatformPrismaService,
     private readonly conversas: ConversasService,
     private readonly mensagens: MensagensService,
     private readonly chatbot: ChatbotService,
     private readonly oportunidades: OportunidadesService,
     private readonly eventos: EventosService,
     private readonly arquivos: ArquivosService,
+    private readonly atividades: AtividadesService,
     @Inject(WHATSAPP_PROVIDER) private readonly provider: WhatsAppProvider,
+    private readonly metaProvider: MetaWhatsAppProvider,
   ) {}
+
+  /** Meta Cloud API no canal real; mock só no simulador. */
+  private providerPara(conexao: { provedor?: string | null } | null | undefined): WhatsAppProvider {
+    if (conexao?.provedor === ProvedorWhatsApp.META) {
+      return this.metaProvider;
+    }
+    return this.provider;
+  }
 
   // ---------- Conexoes ----------
 
   listarConexoes(empresaId: string) {
     return this.prisma.conexaoWhatsApp.findMany({ where: { empresaId }, orderBy: { criadoEm: 'asc' } });
-  }
-
-  /** Instâncias Evolution usadas pelo poller de mensagens. */
-  async listarConexoesAtivasEvolution(): Promise<string[]> {
-    const conexoes = await this.prisma.conexaoWhatsApp.findMany({
-      where: {
-        OR: [
-          { provedor: ProvedorWhatsApp.EVOLUTION },
-          { status: 'CONECTADO' },
-        ],
-      },
-      select: { nomeInstancia: true },
-    });
-    return [...new Set(conexoes.map((c) => c.nomeInstancia))];
   }
 
   async criarConexao(empresaId: string, nomeInstancia: string, numero?: string) {
@@ -92,26 +98,30 @@ export class WhatsAppService {
     }
     if (existente) return existente;
 
-    if (this.provider.nome === 'evolution' && 'garantirInstancia' in this.provider) {
-      await (
-        this.provider as WhatsAppProvider & {
-          garantirInstancia: (nome: string, numero?: string) => Promise<void>;
-        }
-      ).garantirInstancia(nomeInstancia, numero);
-    }
-
     return this.prisma.conexaoWhatsApp.create({
       data: {
         empresaId,
         nomeInstancia,
         numero: numero ?? null,
-        provedor: this.provider.nome === 'evolution' ? ProvedorWhatsApp.EVOLUTION : ProvedorWhatsApp.MOCK,
+        provedor: ProvedorWhatsApp.MOCK,
       },
     });
   }
 
   async conectar(empresaId: string, id: string) {
     const conexao = await this.obterConexao(empresaId, id);
+    if (conexao.provedor === ProvedorWhatsApp.META) {
+      const resultado = await this.metaProvider.conectar(conexao.nomeInstancia);
+      return this.prisma.conexaoWhatsApp.update({
+        where: { id },
+        data: {
+          status: resultado.status as never,
+          numero: resultado.numero ?? conexao.numero,
+          conectadoEm: resultado.status === 'CONECTADO' ? new Date() : conexao.conectadoEm,
+          qrCode: null,
+        },
+      });
+    }
     const resultado = await this.provider.conectar(conexao.nomeInstancia);
     return this.prisma.conexaoWhatsApp.update({
       where: { id },
@@ -126,6 +136,21 @@ export class WhatsAppService {
 
   async statusConexao(empresaId: string, id: string) {
     const conexao = await this.obterConexao(empresaId, id);
+    if (conexao.provedor === ProvedorWhatsApp.META) {
+      const resultado = await this.metaProvider.statusConexao(conexao.nomeInstancia);
+      return this.prisma.conexaoWhatsApp.update({
+        where: { id },
+        data: {
+          status: resultado.status as never,
+          numero: resultado.numero ?? conexao.numero,
+          conectadoEm:
+            resultado.status === 'CONECTADO' && !conexao.conectadoEm
+              ? new Date()
+              : conexao.conectadoEm,
+          qrCode: null,
+        },
+      });
+    }
     const resultado = await this.provider.statusConexao(conexao.nomeInstancia);
 
     let status = resultado.status;
@@ -154,7 +179,11 @@ export class WhatsAppService {
 
   async desconectar(empresaId: string, id: string) {
     const conexao = await this.obterConexao(empresaId, id);
-    await this.provider.desconectar(conexao.nomeInstancia);
+    if (conexao.provedor === ProvedorWhatsApp.META) {
+      await this.metaProvider.desconectar(conexao.nomeInstancia);
+    } else {
+      await this.provider.desconectar(conexao.nomeInstancia);
+    }
     return this.prisma.conexaoWhatsApp.update({
       where: { id },
       data: { status: 'DESCONECTADO' as never, qrCode: null },
@@ -240,7 +269,7 @@ export class WhatsAppService {
     await this.mensagens.registrar(conexao.empresaId, conversa.id, {
       direcao: DirecaoMensagem.RECEBIDA,
       tipo: midiaSalva?.tipo ?? TipoMensagem.TEXTO,
-      conteudo: midiaSalva?.conteudo ?? entrada.texto,
+      conteudo: midiaSalva?.conteudo ?? entrada.textoExibicao ?? entrada.texto,
       status: StatusMensagem.RECEBIDA,
       remetente: entrada.telefone,
       idExterno: entrada.idExterno,
@@ -278,6 +307,15 @@ export class WhatsAppService {
         },
       });
       this.logger.log(`Sessao do bot reaberta conversa=${conversa.id}`);
+      await this.mensagens.registrar(conexao.empresaId, conversa.id, {
+        direcao: DirecaoMensagem.ENVIADA,
+        tipo: TipoMensagem.SISTEMA,
+        conteudo:
+          'O cliente voltou a escrever. O assistente reiniciou o atendimento. O negócio anterior continua no funil.',
+        status: StatusMensagem.ENVIADA,
+        remetente: 'bot',
+        metadados: { interno: true, reabertura: true },
+      });
     }
 
     if (conversa.modo !== ModoAtendimento.BOT) {
@@ -318,21 +356,21 @@ export class WhatsAppService {
     const destino =
       entrada.destinoEnvio ?? extrairJidEnvio(estadoBot) ?? conversa.telefone;
 
-    // Uma bolha só. Envio adiado 1 tick para a Evolution terminar o batch
-    // (senão o sendText entra na fila concatMap/mergeMap e atrasa a próxima msg).
+    // Na Meta, menus viram botões/lista; no simulador, texto numa bolha.
     if (resultado.respostas.length > 0) {
-      const texto = resultado.respostas.join('\n\n');
       const empresaId = conexao.empresaId;
       const conversaId = conversa.id;
       const nomeInstancia = conexao.nomeInstancia;
       const quoted = entrada.quoted;
+      const provedor = conexao.provedor;
+      const respostas = resultado.respostas;
       setTimeout(() => {
-        void this.enviarERegistrar(empresaId, conversaId, {
+        void this.enviarRespostasBot(empresaId, conversaId, {
           nomeInstancia,
           telefone: destino,
-          texto,
-          remetente: 'bot',
+          respostas,
           quoted,
+          provedor,
         }).catch((erro) =>
           this.logger.error(`Falha envio diferido: ${(erro as Error).message}`),
         );
@@ -374,6 +412,7 @@ export class WhatsAppService {
       texto,
       remetente: 'atendente',
       autorUsuarioId: usuarioId,
+      provedor: conexao?.provedor,
     });
 
     await this.prisma.conversa.update({
@@ -400,7 +439,13 @@ export class WhatsAppService {
   ) {
     const oportunidade = await this.prisma.oportunidade.findFirst({
       where: { id: oportunidadeId, empresaId },
-      select: { id: true, dadosPersonalizados: true },
+      select: {
+        id: true,
+        codigo: true,
+        contatoId: true,
+        responsavelId: true,
+        dadosPersonalizados: true,
+      },
     });
     if (!oportunidade) {
       throw Erros.naoEncontrado('OPORTUNIDADE_NAO_ENCONTRADA', 'Oportunidade nao encontrada');
@@ -422,7 +467,7 @@ export class WhatsAppService {
         where: { id: arquivo.id },
         data: { entidade: 'ORCAMENTO', entidadeId: oportunidadeId },
       });
-      const envio = await this.provider.enviarMidia(nomeInstancia, destino, {
+      const envio = await this.providerPara(conexao).enviarMidia(nomeInstancia, destino, {
         buffer,
         mime: arquivo.tipoMime,
         nome: arquivo.nome,
@@ -451,6 +496,7 @@ export class WhatsAppService {
           texto: entrada.texto.slice(1024),
           remetente: 'atendente',
           autorUsuarioId: usuarioId,
+          provedor: conexao?.provedor,
         });
       }
     } else {
@@ -460,6 +506,7 @@ export class WhatsAppService {
         texto: entrada.texto,
         remetente: 'atendente',
         autorUsuarioId: usuarioId,
+        provedor: conexao?.provedor,
       });
     }
 
@@ -515,6 +562,8 @@ export class WhatsAppService {
       );
     }
 
+    await this.agendarFollowUpOrcamento(empresaId, oportunidade, usuarioId);
+
     return {
       mensagem,
       oportunidadeId,
@@ -522,6 +571,108 @@ export class WhatsAppService {
       valorEstimado: entrada.valorEstimado,
       arquivoId,
     };
+  }
+
+  /** Agenda follow-up após envio; substitui FOLLOW_UP pendente do mesmo negócio. */
+  private async agendarFollowUpOrcamento(
+    empresaId: string,
+    oportunidade: {
+      id: string;
+      codigo: string;
+      contatoId: string;
+      responsavelId: string | null;
+    },
+    usuarioId: string,
+  ) {
+    const responsavelId = oportunidade.responsavelId ?? usuarioId;
+    if (!responsavelId) return;
+
+    try {
+      await this.prisma.atividade.updateMany({
+        where: {
+          empresaId,
+          oportunidadeId: oportunidade.id,
+          tipo: TipoAtividade.FOLLOW_UP,
+          concluida: false,
+        },
+        data: { concluida: true, concluidaEm: new Date() },
+      });
+
+      const empresa = await this.platform.empresa.findUnique({
+        where: { id: empresaId },
+        select: { configuracoes: true },
+      });
+      const raw = (empresa?.configuracoes ?? {}) as Record<string, unknown>;
+      const diasRaw = Number(raw.diasFollowUpOrcamento);
+      const dias =
+        Number.isFinite(diasRaw) && diasRaw >= 1 && diasRaw <= 30 ? Math.trunc(diasRaw) : 3;
+      const vencimento = new Date();
+      vencimento.setDate(vencimento.getDate() + dias);
+      vencimento.setHours(9, 0, 0, 0);
+
+      await this.atividades.criar(empresaId, responsavelId, {
+        tipo: TipoAtividade.FOLLOW_UP,
+        titulo: `Follow-up orçamento ${oportunidade.codigo}`,
+        descricao: `Retomar contato após envio da proposta (${dias} dia(s)).`,
+        vencimento,
+        responsavelId,
+        oportunidadeId: oportunidade.id,
+        contatoId: oportunidade.contatoId,
+      });
+    } catch (erro) {
+      this.logger.warn(
+        `Falha ao agendar follow-up após orçamento: ${(erro as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * Envia respostas do bot: na Meta, menus viram interactive (botões/lista);
+   * no simulador, mantém o texto numerado numa bolha só.
+   */
+  private async enviarRespostasBot(
+    empresaId: string,
+    conversaId: string,
+    dados: {
+      nomeInstancia: string;
+      telefone: string;
+      respostas: string[];
+      quoted?: OpcoesEnvioTexto['quoted'];
+      provedor?: string | null;
+    },
+  ) {
+    if (dados.provedor === ProvedorWhatsApp.META) {
+      const partes = particionarRespostasBot(dados.respostas);
+      for (const parte of partes) {
+        if (parte.tipo === 'menu') {
+          await this.enviarERegistrarInterativo(empresaId, conversaId, {
+            nomeInstancia: dados.nomeInstancia,
+            telefone: dados.telefone,
+            menu: parte.menu,
+            provedor: dados.provedor,
+          });
+        } else {
+          await this.enviarERegistrar(empresaId, conversaId, {
+            nomeInstancia: dados.nomeInstancia,
+            telefone: dados.telefone,
+            texto: parte.texto,
+            remetente: 'bot',
+            quoted: dados.quoted,
+            provedor: dados.provedor,
+          });
+        }
+      }
+      return;
+    }
+
+    await this.enviarERegistrar(empresaId, conversaId, {
+      nomeInstancia: dados.nomeInstancia,
+      telefone: dados.telefone,
+      texto: dados.respostas.join('\n\n'),
+      remetente: 'bot',
+      quoted: dados.quoted,
+      provedor: dados.provedor,
+    });
   }
 
   private async enviarERegistrar(
@@ -534,9 +685,16 @@ export class WhatsAppService {
       remetente: string;
       autorUsuarioId?: string;
       quoted?: OpcoesEnvioTexto['quoted'];
+      provedor?: string | null;
     },
   ) {
-    const envio = await this.provider.enviarTexto(
+    // Meta: fora da janela de 24h sem inbound recente → orientar template
+    if (dados.provedor === ProvedorWhatsApp.META) {
+      await this.assertJanelaMeta24h(conversaId);
+    }
+
+    const provider = this.providerPara({ provedor: dados.provedor });
+    const envio = await provider.enviarTexto(
       dados.nomeInstancia,
       dados.telefone,
       dados.texto,
@@ -550,8 +708,60 @@ export class WhatsAppService {
       remetente: dados.remetente,
       autorUsuarioId: dados.autorUsuarioId ?? null,
       idExterno: envio.idExterno ?? null,
-      metadados: envio.erro ? { erro: envio.erro } : null,
+      metadados: {
+        ...(envio.erro ? { erro: envio.erro } : {}),
+        ...(dados.provedor ? { provider: String(dados.provedor).toLowerCase() } : {}),
+      },
     });
+  }
+
+  private async enviarERegistrarInterativo(
+    empresaId: string,
+    conversaId: string,
+    dados: {
+      nomeInstancia: string;
+      telefone: string;
+      menu: MenuInterativoEnvio;
+      provedor?: string | null;
+    },
+  ) {
+    await this.assertJanelaMeta24h(conversaId);
+    const envio = await this.metaProvider.enviarInterativo(
+      dados.nomeInstancia,
+      dados.telefone,
+      dados.menu,
+    );
+    const conteudo = this.metaProvider.textoMenuParaRegistro(dados.menu);
+    return this.mensagens.registrar(empresaId, conversaId, {
+      direcao: DirecaoMensagem.ENVIADA,
+      tipo: TipoMensagem.TEXTO,
+      conteudo,
+      status: envio.status === 'ENVIADA' ? StatusMensagem.ENVIADA : StatusMensagem.ERRO,
+      remetente: 'bot',
+      idExterno: envio.idExterno ?? null,
+      metadados: {
+        provider: 'meta',
+        interactive: dados.menu.opcoes.length <= 3 ? 'button' : 'list',
+        opcoes: dados.menu.opcoes.map((o) => o.id),
+        ...(envio.erro ? { erro: envio.erro } : {}),
+      },
+    });
+  }
+
+  private async assertJanelaMeta24h(conversaId: string) {
+    const ultimaRecebida = await this.prisma.mensagem.findFirst({
+      where: { conversaId, direcao: DirecaoMensagem.RECEBIDA },
+      orderBy: { criadoEm: 'desc' },
+    });
+    const aberta =
+      !!ultimaRecebida &&
+      Date.now() - ultimaRecebida.criadoEm.getTime() < 24 * 60 * 60 * 1000;
+    if (!aberta) {
+      throw Erros.invalido(
+        'META_JANELA_24H',
+        'Fora da janela de 24h da Meta. Use o template hello_world em Configurações → WhatsApp Oficial.',
+      );
+    }
   }
 
   private async salvarMidiaRecebida(

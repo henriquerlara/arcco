@@ -21,6 +21,7 @@ export const criarContatoSchema = z.object({
   email: z.string().email().optional().or(z.literal('')),
   tipo: z.nativeEnum(TipoContato).default(TipoContato.OUTRO),
   empresaNome: z.string().optional(),
+  documento: z.string().optional().nullable(),
   origem: z.string().optional(),
   observacoes: z.string().optional(),
   responsavelId: z.string().uuid().optional().nullable(),
@@ -130,6 +131,11 @@ export const criarProdutoSchema = z.object({
   nome: z.string().min(2),
   descricao: z.string().optional().nullable(),
   unidade: z.string().min(1).default('un'),
+  ncm: z
+    .string()
+    .regex(/^\d{8}$/, 'NCM deve ter 8 dígitos')
+    .optional()
+    .nullable(),
   precoVenda: z.number().nonnegative().default(0),
   /** Só na criação — vira a primeira movimentação ENTRADA. */
   saldoInicial: z.number().nonnegative().default(0),
@@ -143,6 +149,11 @@ export const atualizarProdutoSchema = z.object({
   nome: z.string().min(2).optional(),
   descricao: z.string().optional().nullable(),
   unidade: z.string().min(1).optional(),
+  ncm: z
+    .string()
+    .regex(/^\d{8}$/, 'NCM deve ter 8 dígitos')
+    .optional()
+    .nullable(),
   precoVenda: z.number().nonnegative().optional(),
   estoqueMinimo: z.number().nonnegative().optional(),
   controlaEstoque: z.boolean().optional(),
@@ -242,13 +253,6 @@ export const estadoBotSchema = z.object({
 
 export type EstadoBot = z.infer<typeof estadoBotSchema>;
 
-export const paginacaoRespostaSchema = z.object({
-  pagina: z.number(),
-  porPagina: z.number(),
-  total: z.number(),
-  totalPaginas: z.number(),
-});
-
 export function criarRespostaPaginada<T>(
   dados: T[],
   total: number,
@@ -265,3 +269,15 @@ export function criarRespostaPaginada<T>(
     },
   };
 }
+
+export const enderecoFiscalSchema = z.object({
+  logradouro: z.string().min(1).optional(),
+  numero: z.string().optional(),
+  complemento: z.string().optional(),
+  bairro: z.string().optional(),
+  municipio: z.string().optional(),
+  uf: z.string().length(2).optional(),
+  cep: z.string().optional(),
+});
+
+export type EnderecoFiscal = z.infer<typeof enderecoFiscalSchema>;

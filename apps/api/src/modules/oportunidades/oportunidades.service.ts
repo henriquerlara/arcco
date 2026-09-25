@@ -12,6 +12,7 @@ import {
 } from '@arcco/contratos';
 import type { z } from 'zod';
 import { Prisma } from '@prisma/client';
+import { PlatformPrismaService } from '../../database/platform-prisma.service';
 import { PrismaService } from '../../database/prisma.service';
 import { Erros } from '../../common/erros/erros';
 import { avaliarTransicaoEtapa } from '../../common/utils/funil';
@@ -69,6 +70,7 @@ const INCLUDE_DETALHE = {
 export class OportunidadesService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly platform: PlatformPrismaService,
     private readonly campos: CamposPersonalizadosService,
     private readonly eventos: EventosService,
     private readonly produtos: ProdutosService,
@@ -98,23 +100,91 @@ export class OportunidadesService {
       this.prisma.oportunidade.count({ where }),
     ]);
 
-    return criarRespostaPaginada(dados, total, query.pagina, query.porPagina);
+    return criarRespostaPaginada(
+      await this.anexarResponsaveis(dados),
+      total,
+      query.pagina,
+      query.porPagina,
+    );
   }
 
-  /** Agrupa oportunidades por etapa para exibicao em kanban (inclui Fechado/Perdido). */
-  async kanban(empresaId: string) {
-    const [etapas, oportunidades] = await this.prisma.$transaction([
-      this.prisma.etapaFunil.findMany({ where: { empresaId, ativo: true }, orderBy: { ordem: 'asc' } }),
+  /**
+   * Agrupa oportunidades por etapa para o kanban (inclui Fechado/Perdido).
+   * Opps em etapa inativa/removida do funil ativo vão para "Fora do funil".
+   */
+  async kanban(
+    empresaId: string,
+    filtros: { responsavelId?: string; categoriaId?: string } = {},
+  ) {
+    const where: Prisma.OportunidadeWhereInput = { empresaId };
+    if (filtros.responsavelId) where.responsavelId = filtros.responsavelId;
+    if (filtros.categoriaId) where.categoriaId = filtros.categoriaId;
+
+    const [etapasAtivas, oportunidades] = await this.prisma.$transaction([
+      this.prisma.etapaFunil.findMany({
+        where: { empresaId, ativo: true },
+        orderBy: { ordem: 'asc' },
+      }),
       this.prisma.oportunidade.findMany({
-        where: { empresaId },
+        where,
         include: INCLUDE_PADRAO,
         orderBy: { atualizadoEm: 'desc' },
       }),
     ]);
 
-    return etapas.map((etapa) => ({
+    const idsAtivos = new Set(etapasAtivas.map((e) => e.id));
+    const orfas = oportunidades.filter((o) => !idsAtivos.has(o.etapaId));
+    const comResponsavel = await this.anexarResponsaveis(oportunidades);
+    const porId = new Map(comResponsavel.map((o) => [o.id, o]));
+
+    const colunas = etapasAtivas.map((etapa) => ({
       etapa,
-      oportunidades: oportunidades.filter((o) => o.etapaId === etapa.id),
+      oportunidades: oportunidades
+        .filter((o) => o.etapaId === etapa.id)
+        .map((o) => porId.get(o.id)!),
+    }));
+
+    if (orfas.length > 0) {
+      colunas.push({
+        etapa: {
+          id: '__fora_do_funil__',
+          empresaId,
+          nome: 'Fora do funil',
+          ordem: 9_999,
+          tipo: TipoEtapaFunil.ABERTA,
+          chaveSistema: null,
+          ativo: false,
+          criadoEm: new Date(0),
+          atualizadoEm: new Date(0),
+        },
+        oportunidades: orfas.map((o) => porId.get(o.id)!),
+      });
+    }
+
+    return colunas;
+  }
+
+  private async anexarResponsaveis<T extends { responsavelId?: string | null }>(
+    oportunidades: T[],
+  ): Promise<Array<T & { responsavel: { id: string; nome: string; email: string } | null }>> {
+    const ids = [
+      ...new Set(
+        oportunidades
+          .map((o) => o.responsavelId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    if (ids.length === 0) {
+      return oportunidades.map((o) => ({ ...o, responsavel: null }));
+    }
+    const usuarios = await this.platform.usuario.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, nome: true, email: true },
+    });
+    const porId = new Map(usuarios.map((u) => [u.id, u]));
+    return oportunidades.map((o) => ({
+      ...o,
+      responsavel: o.responsavelId ? porId.get(o.responsavelId) ?? null : null,
     }));
   }
 
@@ -148,10 +218,12 @@ export class OportunidadesService {
         origem: OrigemHistoricoEtapa.CRIACAO,
         criadoEm: oportunidade.criadoEm,
       });
-      return this.prisma.oportunidade.findFirstOrThrow({
+      const seed = await this.prisma.oportunidade.findFirstOrThrow({
         where: { id, empresaId },
         include: INCLUDE_DETALHE,
       });
+      const [comResp] = await this.anexarResponsaveis([seed]);
+      return comResp!;
     }
 
     if (oportunidade.eventos.length === 0) {
@@ -169,13 +241,16 @@ export class OportunidadesService {
           criadoEm: item.criadoEm,
         })),
       });
-      return this.prisma.oportunidade.findFirstOrThrow({
+      const atualizada = await this.prisma.oportunidade.findFirstOrThrow({
         where: { id, empresaId },
         include: INCLUDE_DETALHE,
       });
+      const [comResp] = await this.anexarResponsaveis([atualizada]);
+      return comResp!;
     }
 
-    return oportunidade;
+    const [comResp] = await this.anexarResponsaveis([oportunidade]);
+    return comResp!;
   }
 
   private async proximoCodigo(empresaId: string): Promise<string> {
@@ -498,35 +573,74 @@ export class OportunidadesService {
       });
 
       if (destino.tipo === TipoEtapaFunil.GANHA) {
-        const vigente = await tx.orcamento.findFirst({
+        const candidatos = [
+          StatusOrcamento.ENVIADO,
+          StatusOrcamento.ACEITO,
+          StatusOrcamento.RASCUNHO,
+        ] as const;
+
+        const jaConvertido = await tx.orcamento.findFirst({
           where: {
             empresaId,
             oportunidadeId: id,
-            vigente: true,
-            status: { in: [StatusOrcamento.ENVIADO, StatusOrcamento.ACEITO] },
+            status: StatusOrcamento.CONVERTIDO,
           },
         });
-        if (vigente) {
+
+        let final = jaConvertido
+          ? null
+          : await tx.orcamento.findFirst({
+              where: {
+                empresaId,
+                oportunidadeId: id,
+                vigente: true,
+                status: { in: [...candidatos] },
+              },
+              include: { itens: { select: { id: true } } },
+            });
+
+        if (!jaConvertido && (!final || final.itens.length === 0)) {
+          final = await tx.orcamento.findFirst({
+            where: {
+              empresaId,
+              oportunidadeId: id,
+              status: { in: [...candidatos] },
+              itens: { some: {} },
+            },
+            orderBy: [{ atualizadoEm: 'desc' }, { versao: 'desc' }],
+            include: { itens: { select: { id: true } } },
+          });
+        }
+
+        if (!jaConvertido && final && final.itens.length > 0) {
           await this.produtos.baixarPorOrcamento(
             tx,
             empresaId,
-            vigente.id,
+            final.id,
             id,
             opcoes.usuarioId,
           );
+          await tx.orcamento.updateMany({
+            where: { oportunidadeId: id, empresaId, vigente: true, id: { not: final.id } },
+            data: { vigente: false },
+          });
           await tx.orcamento.update({
-            where: { id: vigente.id },
-            data: { status: StatusOrcamento.CONVERTIDO, convertidoEm: new Date() },
+            where: { id: final.id },
+            data: {
+              status: StatusOrcamento.CONVERTIDO,
+              vigente: true,
+              convertidoEm: new Date(),
+            },
           });
           await this.eventos.registrar(tx, {
             empresaId,
             oportunidadeId: id,
             tipo: TipoEvento.ESTOQUE_BAIXADO,
-            titulo: 'Estoque baixado pelo orçamento vigente',
-            descricao: `Baixa automática do orçamento ${vigente.numero}.`,
+            titulo: 'Estoque baixado pelo orçamento final',
+            descricao: `Baixa automática do orçamento ${final.numero} (último montado; WhatsApp opcional).`,
             origem,
             usuarioId: opcoes.usuarioId,
-            dados: { orcamentoId: vigente.id },
+            dados: { orcamentoId: final.id },
           });
         }
       }

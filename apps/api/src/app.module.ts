@@ -25,6 +25,7 @@ import { IaModule } from './modules/ia/ia.module';
 import { EventosModule } from './modules/eventos/eventos.module';
 import { ProdutosModule } from './modules/produtos/produtos.module';
 import { OrcamentosModule } from './modules/orcamentos/orcamentos.module';
+import { FiscalModule } from './modules/fiscal/fiscal.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { OrcamentosModule } from './modules/orcamentos/orcamentos.module';
     ArquivosModule,
     ProdutosModule,
     OrcamentosModule,
+    FiscalModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: FiltroExcecaoGlobal },

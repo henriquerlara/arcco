@@ -74,10 +74,18 @@ export const TipoAtividade = {
 export type TipoAtividade = (typeof TipoAtividade)[keyof typeof TipoAtividade];
 
 export const ProvedorWhatsApp = {
-  EVOLUTION: 'EVOLUTION',
   MOCK: 'MOCK',
+  META: 'META',
 } as const;
 export type ProvedorWhatsApp = (typeof ProvedorWhatsApp)[keyof typeof ProvedorWhatsApp];
+
+/** Modo operacional da conexão (string no banco). */
+export const ModoConexaoWhatsApp = {
+  CLOUD_API: 'cloud_api',
+  COEXISTENCE: 'coexistence',
+} as const;
+export type ModoConexaoWhatsApp =
+  (typeof ModoConexaoWhatsApp)[keyof typeof ModoConexaoWhatsApp];
 
 export const StatusConexaoWhatsApp = {
   DESCONECTADO: 'DESCONECTADO',
@@ -187,6 +195,15 @@ export const StatusOrcamento = {
   CONVERTIDO: 'CONVERTIDO',
 } as const;
 export type StatusOrcamento = (typeof StatusOrcamento)[keyof typeof StatusOrcamento];
+
+export const StatusNotaFiscal = {
+  RASCUNHO: 'RASCUNHO',
+  PROCESSANDO: 'PROCESSANDO',
+  AUTORIZADA: 'AUTORIZADA',
+  REJEITADA: 'REJEITADA',
+  CANCELADA: 'CANCELADA',
+} as const;
+export type StatusNotaFiscal = (typeof StatusNotaFiscal)[keyof typeof StatusNotaFiscal];
 
 export const TipoMovimentacaoEstoque = {
   ENTRADA: 'ENTRADA',

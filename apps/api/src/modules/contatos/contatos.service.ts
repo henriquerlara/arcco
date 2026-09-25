@@ -2,11 +2,13 @@ import { Injectable } from '@nestjs/common';
 import {
   criarRespostaPaginada,
   EntidadeCampoPersonalizado,
+  TipoContato,
   type criarContatoSchema,
   type paginacaoQuerySchema,
 } from '@arcco/contratos';
 import type { z } from 'zod';
 import { Prisma } from '@prisma/client';
+import { PlatformPrismaService } from '../../database/platform-prisma.service';
 import { PrismaService } from '../../database/prisma.service';
 import { Erros } from '../../common/erros/erros';
 import { normalizarTelefone } from '../../common/utils/telefone';
@@ -20,22 +22,40 @@ type PaginacaoQuery = z.infer<typeof paginacaoQuerySchema>;
 export class ContatosService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly platform: PlatformPrismaService,
     private readonly campos: CamposPersonalizadosService,
   ) {}
 
-  async listar(empresaId: string, query: PaginacaoQuery) {
+  async listar(empresaId: string, query: PaginacaoQuery & { tipo?: string }) {
     const where: Prisma.ContatoWhereInput = { empresaId };
-    if (query.busca) {
-      where.OR = [
-        { nome: { contains: query.busca } },
-        { telefoneNormalizado: { contains: normalizarTelefone(query.busca) } },
-        { empresaNome: { contains: query.busca } },
-      ];
+    if (query.tipo && Object.values(TipoContato).includes(query.tipo as TipoContato)) {
+      where.tipo = query.tipo as TipoContato;
+    }
+    const termo = query.busca?.trim();
+    if (termo) {
+      const like = `%${termo.toLocaleLowerCase('pt-BR').replace(/[%_]/g, '')}%`;
+      const digitos = termo.replace(/\D+/g, '');
+      const telefoneSql = digitos
+        ? Prisma.sql`OR telefone LIKE ${'%' + digitos + '%'} OR "telefoneNormalizado" LIKE ${'%' + digitos + '%'}`
+        : Prisma.empty;
+      const ids = await this.prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM contatos
+        WHERE "empresaId" = ${empresaId}
+        AND (
+          lower(nome) LIKE ${like}
+          OR lower(COALESCE("empresaNome", '')) LIKE ${like}
+          ${telefoneSql}
+        )
+      `;
+      where.id = { in: ids.map((linha) => linha.id) };
     }
 
     const [dados, total] = await this.prisma.$transaction([
       this.prisma.contato.findMany({
         where,
+        include: {
+          _count: { select: { oportunidades: true, contatosObras: true } },
+        },
         orderBy: { criadoEm: 'desc' },
         skip: (query.pagina - 1) * query.porPagina,
         take: query.porPagina,
@@ -43,7 +63,13 @@ export class ContatosService {
       this.prisma.contato.count({ where }),
     ]);
 
-    return criarRespostaPaginada(dados, total, query.pagina, query.porPagina);
+    const mapeados = dados.map(({ _count, ...contato }) => ({
+      ...contato,
+      totalOportunidades: _count.oportunidades,
+      totalObras: _count.contatosObras,
+    }));
+
+    return criarRespostaPaginada(mapeados, total, query.pagina, query.porPagina);
   }
 
   async obter(empresaId: string, id: string) {
@@ -51,10 +77,35 @@ export class ContatosService {
       where: { id, empresaId },
       include: {
         contatosObras: { include: { obra: true } },
+        _count: { select: { oportunidades: true, contatosObras: true } },
+        oportunidades: {
+          select: { id: true, codigo: true, titulo: true, etapaId: true, valorEstimado: true },
+          orderBy: { atualizadoEm: 'desc' },
+          take: 20,
+        },
       },
     });
     if (!contato) throw Erros.naoEncontrado('CONTATO_NAO_ENCONTRADO', 'Contato nao encontrado');
-    return contato;
+
+    const { _count, contatosObras, ...resto } = contato;
+    let responsavel: { id: string; nome: string; email: string } | null = null;
+    if (resto.responsavelId) {
+      responsavel = await this.platform.usuario.findFirst({
+        where: { id: resto.responsavelId, empresaId },
+        select: { id: true, nome: true, email: true },
+      });
+    }
+    return {
+      ...resto,
+      responsavel,
+      obras: contatosObras.map((v) => ({
+        id: v.id,
+        papel: v.papel,
+        obra: v.obra,
+      })),
+      totalOportunidades: _count.oportunidades,
+      totalObras: _count.contatosObras,
+    };
   }
 
   async criar(empresaId: string, dto: CriarContatoInput) {
@@ -85,6 +136,7 @@ export class ContatosService {
         email: dto.email || null,
         tipo: dto.tipo,
         empresaNome: dto.empresaNome ?? null,
+        documento: dto.documento?.replace(/\D/g, '') || null,
         origem: dto.origem ?? null,
         observacoes: dto.observacoes ?? null,
         responsavelId: dto.responsavelId ?? null,
@@ -101,6 +153,10 @@ export class ContatosService {
       email: dto.email === '' ? null : dto.email,
       tipo: dto.tipo,
       empresaNome: dto.empresaNome,
+      documento:
+        dto.documento === undefined
+          ? undefined
+          : dto.documento?.replace(/\D/g, '') || null,
       origem: dto.origem,
       observacoes: dto.observacoes,
       responsavelId: dto.responsavelId,

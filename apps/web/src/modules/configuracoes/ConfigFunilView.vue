@@ -14,7 +14,7 @@ const query = useQuery({ queryKey: ['etapas-funil'], queryFn: () => servicoFunil
 
 <template>
   <div class="space-y-5">
-    <CabecalhoPagina titulo="Processo comercial" descricao="Um fluxo curto e estável permite que as automações saibam exatamente o que fazer." />
+    <CabecalhoPagina titulo="Funil" descricao="Um fluxo curto e estável permite que as automações saibam exatamente o que fazer." />
     <NavConfiguracoes />
     <EstadoErro v-if="query.isError.value" :erro="query.error.value" @tentar-novamente="query.refetch()" />
 

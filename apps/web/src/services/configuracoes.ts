@@ -1,7 +1,6 @@
 import {
   configuracoesEmpresaPadrao,
   StatusConexaoWhatsApp,
-  type ChatbotConfig,
   type ConfiguracoesEmpresa,
 } from '@arcco/contratos';
 import type {
@@ -24,6 +23,7 @@ function extrairConfiguracoes(empresa: Empresa): ConfiguracoesEmpresa {
     horarioAtendimento: atual.horarioAtendimento ?? padrao.horarioAtendimento,
     chatbot: { ...padrao.chatbot, ...atual.chatbot },
     onboardingConcluido: atual.onboardingConcluido ?? padrao.onboardingConcluido,
+    diasFollowUpOrcamento: atual.diasFollowUpOrcamento ?? padrao.diasFollowUpOrcamento,
   };
 }
 
@@ -123,16 +123,6 @@ export const servicoCamposPersonalizados = {
   },
 };
 
-export const servicoChatbot = {
-  async obter(): Promise<ChatbotConfig> {
-    return extrairConfiguracoes(await servicoEmpresa.obter()).chatbot;
-  },
-  async salvar(dados: Partial<ChatbotConfig>): Promise<ChatbotConfig> {
-    const config = await servicoEmpresa.salvarConfiguracoes({ chatbot: dados as ChatbotConfig });
-    return config.chatbot;
-  },
-};
-
 /** Converte uma conexão do WhatsApp em um resumo de status para a UI. */
 function mapearStatus(conexao: ConexaoWhatsApp): StatusWhatsApp {
   return {
@@ -158,8 +148,9 @@ export const servicoWhatsApp = {
   },
   preferida(conexoes: ConexaoWhatsApp[]): ConexaoWhatsApp | undefined {
     return (
-      conexoes.find((c) => c.status === StatusConexaoWhatsApp.CONECTADO) ??
-      conexoes.find((c) => c.provedor === 'EVOLUTION') ??
+      conexoes.find((c) => c.provedor === 'META' && c.status === StatusConexaoWhatsApp.CONECTADO) ??
+      conexoes.find((c) => c.provedor === 'META') ??
+      conexoes.find((c) => c.provedor === 'MOCK') ??
       conexoes[0]
     );
   },

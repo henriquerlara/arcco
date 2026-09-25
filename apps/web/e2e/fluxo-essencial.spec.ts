@@ -91,7 +91,7 @@ test.describe('Fluxo autenticado (requer API)', () => {
     await entrar(page);
     await page.getByRole('link', { name: 'Negócios' }).click();
     await expect(page).toHaveURL(/\/app\/pipeline/);
-    await expect(page.getByRole('heading', { name: 'Pipeline' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Negócios' })).toBeVisible();
 
     await page.getByRole('link', { name: 'Pessoas' }).click();
     await expect(page).toHaveURL(/\/app\/contatos/);
@@ -103,14 +103,14 @@ test.describe('Fluxo autenticado (requer API)', () => {
   test('pipeline começa vazio sem dados de seed', async ({ page }) => {
     await entrar(page);
     await page.goto('/app/pipeline');
-    await expect(page.getByRole('heading', { name: 'Pipeline' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Negócios' })).toBeVisible();
     await expect(page.locator('main article[role="link"]')).toHaveCount(0);
   });
 
   test('cria um contato', async ({ page }) => {
     await entrar(page);
     await page.goto('/app/contatos');
-    await page.getByRole('button', { name: 'Novo contato' }).first().click();
+    await page.getByRole('button', { name: 'Nova pessoa' }).first().click();
     const nome = `Contato E2E ${Date.now()}`;
     await page.getByLabel('Nome').fill(nome);
     await page.getByLabel('Telefone').fill(`11${String(Date.now()).slice(-9)}`);

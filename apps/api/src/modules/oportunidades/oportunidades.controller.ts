@@ -5,12 +5,14 @@ import {
   moverOportunidadeSchema,
   paginacaoQuerySchema,
   OrigemHistoricoEtapa,
+  PerfilUsuario,
 } from '@arcco/contratos';
 import type { z } from 'zod';
 import { OportunidadesService } from './oportunidades.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { EmpresaAtual } from '../../common/decorators/empresa-atual.decorator';
 import { UsuarioAtual } from '../../common/decorators/usuario-atual.decorator';
+import { Perfis } from '../../common/decorators/perfis.decorator';
 import type { UsuarioAutenticado } from '../../common/auth/tipos';
 
 type CriarOportunidadeInput = z.infer<typeof criarOportunidadeSchema>;
@@ -31,8 +33,12 @@ export class OportunidadesController {
   }
 
   @Get('kanban')
-  kanban(@EmpresaAtual() empresaId: string) {
-    return this.servico.kanban(empresaId);
+  kanban(
+    @EmpresaAtual() empresaId: string,
+    @Query('responsavelId') responsavelId?: string,
+    @Query('categoriaId') categoriaId?: string,
+  ) {
+    return this.servico.kanban(empresaId, { responsavelId, categoriaId });
   }
 
   @Get(':id')
@@ -86,6 +92,7 @@ export class OportunidadesController {
     return this.servico.marcarAjusteCorrigido(empresaId, id, usuario.id, corpo?.ajusteId);
   }
 
+  @Perfis(PerfilUsuario.PROPRIETARIO, PerfilUsuario.GESTOR, PerfilUsuario.VENDEDOR)
   @Delete(':id')
   remover(@EmpresaAtual() empresaId: string, @Param('id') id: string) {
     return this.servico.remover(empresaId, id);

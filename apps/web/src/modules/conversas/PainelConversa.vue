@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
-import { Bot, FileText, Send, UserCheck, CheckCircle2, Info } from 'lucide-vue-next';
+import { Bot, FileText, Send, UserCheck, CheckCircle2, Info, Check, CheckCheck } from 'lucide-vue-next';
 import { DirecaoMensagem, ModoAtendimento } from '@arcco/contratos';
 import type { Conversa, Mensagem } from '@/types';
 import Button from '@/components/ui/Button.vue';
+import Badge from '@/components/ui/Badge.vue';
 import BadgeStatus from '@/components/compartilhados/BadgeStatus.vue';
-import { formatarHora, iniciais } from '@/composables/formatadores';
+import { formatarHora, formatarTelefone, iniciais } from '@/composables/formatadores';
 import { cn } from '@/composables/cn';
 import { servicoArquivos } from '@/services';
 
@@ -31,6 +32,40 @@ const abrindoArquivoId = ref<string | null>(null);
 const podeEnviar = computed(
   () => props.conversa?.modo === ModoAtendimento.HUMANO,
 );
+
+const ehMeta = computed(
+  () => String(props.conversa?.conexao?.provedor ?? '').toUpperCase() === 'META',
+);
+
+const ROTULO_INTENCAO: Record<string, string> = {
+  VENDAS: 'Vendas',
+  NOVO_ORCAMENTO: 'Novo orçamento',
+  NEGOCIAR_ORCAMENTO: 'Negociar',
+  AJUSTAR_ORCAMENTO: 'Ajuste',
+  FINANCEIRO: 'Financeiro',
+  ENTREGA: 'Entrega',
+  SAC: 'SAC',
+  POS_VENDA: 'Pós-venda',
+  FALAR_COM_PESSOA: 'Humano',
+  DUVIDA: 'Dúvida',
+  ACOMPANHAR_SOLICITACAO: 'Acompanhar',
+  OUTRO: 'Outro',
+};
+
+function rotuloIntencao(valor?: string | null): string | null {
+  if (!valor) return null;
+  return ROTULO_INTENCAO[valor] ?? valor;
+}
+
+function rotuloStatus(status: string, enviada: boolean): string | null {
+  if (!enviada) return null;
+  if (status === 'ERRO') return 'Falha no envio';
+  if (status === 'PROCESSANDO') return 'Enviando…';
+  if (status === 'LIDA') return 'Lida';
+  if (status === 'ENTREGUE') return 'Entregue';
+  if (status === 'ENVIADA') return 'Enviada';
+  return null;
+}
 
 async function rolarParaFim() {
   await nextTick();
@@ -95,11 +130,15 @@ function aoTeclar(evento: KeyboardEvent) {
           </span>
           <div>
             <p class="text-sm font-semibold text-texto">
-              {{ conversa.nomeExibicao ?? conversa.contato?.nome ?? conversa.telefone }}
+              {{ conversa.nomeExibicao ?? conversa.contato?.nome ?? formatarTelefone(conversa.telefone) }}
             </p>
-            <div class="mt-0.5 flex items-center gap-1.5">
+            <div class="mt-0.5 flex flex-wrap items-center gap-1.5">
               <BadgeStatus familia="statusConversa" :valor="conversa.status" />
               <BadgeStatus familia="modoAtendimento" :valor="conversa.modo" />
+              <Badge v-if="rotuloIntencao(conversa.intencaoAtual ?? conversa.intencao)" variante="neutro">
+                {{ rotuloIntencao(conversa.intencaoAtual ?? conversa.intencao) }}
+              </Badge>
+              <Badge v-if="ehMeta" variante="info">WhatsApp Oficial</Badge>
             </div>
           </div>
         </div>
@@ -170,10 +209,16 @@ function aoTeclar(evento: KeyboardEvent) {
               "
             >
               <p
-                v-if="msg.direcao === DirecaoMensagem.ENVIADA && msg.deBot"
+                v-if="msg.direcao === DirecaoMensagem.ENVIADA && (msg.remetente === 'bot' || msg.deBot)"
                 class="mb-0.5 flex items-center gap-1 text-[11px] font-medium opacity-70"
               >
                 <Bot class="size-3" /> Bot
+              </p>
+              <p
+                v-else-if="msg.direcao === DirecaoMensagem.ENVIADA && msg.remetente === 'atendente'"
+                class="mb-0.5 flex items-center gap-1 text-[11px] font-medium opacity-70"
+              >
+                <UserCheck class="size-3" /> Atendente
               </p>
               <img
                 v-if="msg.tipo === 'IMAGEM' && msg.arquivoId && previewsImagem[msg.arquivoId]"
@@ -206,6 +251,20 @@ function aoTeclar(evento: KeyboardEvent) {
                   )
                 "
               >
+                <span
+                  v-if="rotuloStatus(msg.status, msg.direcao === DirecaoMensagem.ENVIADA)"
+                  :class="
+                    cn(
+                      'mr-1.5 inline-flex items-center gap-0.5',
+                      msg.status === 'ERRO' && 'text-erro',
+                      msg.status === 'LIDA' && 'text-dourado-claro',
+                    )
+                  "
+                >
+                  <CheckCheck v-if="msg.status === 'LIDA' || msg.status === 'ENTREGUE'" class="size-3" />
+                  <Check v-else-if="msg.status === 'ENVIADA'" class="size-3" />
+                  {{ rotuloStatus(msg.status, true) }}
+                </span>
                 {{ formatarHora(msg.criadoEm) }}
               </p>
             </div>

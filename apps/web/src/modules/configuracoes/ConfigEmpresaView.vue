@@ -41,6 +41,14 @@ const form = reactive({
   telefone: '',
   cidade: '',
   estado: '',
+  cnpj: '',
+  inscricaoEstadual: '',
+  logradouro: '',
+  numero: '',
+  bairro: '',
+  municipio: '',
+  uf: '',
+  cep: '',
 });
 
 watch(
@@ -53,6 +61,14 @@ watch(
     form.telefone = e.telefone ?? '';
     form.cidade = e.cidade ?? '';
     form.estado = e.estado ?? '';
+    form.cnpj = e.cnpj ?? '';
+    form.inscricaoEstadual = e.inscricaoEstadual ?? '';
+    form.logradouro = e.enderecoFiscal?.logradouro ?? '';
+    form.numero = e.enderecoFiscal?.numero ?? '';
+    form.bairro = e.enderecoFiscal?.bairro ?? '';
+    form.municipio = e.enderecoFiscal?.municipio ?? e.cidade ?? '';
+    form.uf = e.enderecoFiscal?.uf ?? e.estado ?? '';
+    form.cep = e.enderecoFiscal?.cep ?? '';
     logoArquivoId.value = e.logoArquivoId ?? null;
     if (e.logoArquivoId) {
       try {
@@ -97,6 +113,16 @@ async function salvar() {
       cidade: form.cidade || null,
       estado: form.estado || null,
       logoArquivoId: logoArquivoId.value,
+      cnpj: form.cnpj || null,
+      inscricaoEstadual: form.inscricaoEstadual || null,
+      enderecoFiscal: {
+        logradouro: form.logradouro || undefined,
+        numero: form.numero || undefined,
+        bairro: form.bairro || undefined,
+        municipio: form.municipio || undefined,
+        uf: form.uf || undefined,
+        cep: form.cep || undefined,
+      },
     });
     if (auth.empresa) auth.empresa = { ...auth.empresa, ...atualizada };
     sucesso('Dados da empresa atualizados.');
@@ -111,7 +137,7 @@ async function salvar() {
 
 <template>
   <div class="space-y-5">
-    <CabecalhoPagina titulo="Configurações" descricao="Gerencie os dados e o funcionamento da sua conta." />
+    <CabecalhoPagina titulo="Empresa" descricao="Dados cadastrais e fiscais da sua empresa." />
     <NavConfiguracoes />
 
     <Card class="max-w-2xl">
@@ -145,10 +171,16 @@ async function salvar() {
           <div class="space-y-1.5">
             <Label>Segmento</Label>
             <Select v-model="form.segmento" :opcoes="opcoesSegmento" />
+            <p
+              v-if="data && form.segmento !== data.segmento"
+              class="text-xs text-alerta"
+            >
+              Trocar o segmento não recria categorias, campos nem funil. O que já existe permanece.
+            </p>
           </div>
           <div class="space-y-1.5">
             <Label>Telefone</Label>
-            <Input v-model="form.telefone" />
+            <Input v-model="form.telefone" mascara="telefone" placeholder="(11) 90000-0000" autocomplete="tel" />
           </div>
           <div class="space-y-1.5">
             <Label>Cidade</Label>
@@ -156,7 +188,45 @@ async function salvar() {
           </div>
           <div class="space-y-1.5">
             <Label>Estado</Label>
-            <Input v-model="form.estado" placeholder="UF" />
+            <Input v-model="form.estado" mascara="uf" placeholder="UF" />
+          </div>
+          <div class="space-y-1.5 sm:col-span-2 border-t border-borda pt-4">
+            <p class="text-sm font-medium text-texto">Dados fiscais (NF-e)</p>
+            <p class="text-xs text-texto-secundario">
+              Necessários para emitir nota a partir de orçamentos convertidos.
+            </p>
+          </div>
+          <div class="space-y-1.5">
+            <Label>CNPJ</Label>
+            <Input v-model="form.cnpj" mascara="cnpj" placeholder="00.000.000/0000-00" />
+          </div>
+          <div class="space-y-1.5">
+            <Label>Inscrição estadual</Label>
+            <Input v-model="form.inscricaoEstadual" />
+          </div>
+          <div class="space-y-1.5 sm:col-span-2">
+            <Label>Logradouro</Label>
+            <Input v-model="form.logradouro" />
+          </div>
+          <div class="space-y-1.5">
+            <Label>Número</Label>
+            <Input v-model="form.numero" />
+          </div>
+          <div class="space-y-1.5">
+            <Label>Bairro</Label>
+            <Input v-model="form.bairro" />
+          </div>
+          <div class="space-y-1.5">
+            <Label>Município</Label>
+            <Input v-model="form.municipio" />
+          </div>
+          <div class="space-y-1.5">
+            <Label>UF fiscal</Label>
+            <Input v-model="form.uf" mascara="uf" placeholder="UF" />
+          </div>
+          <div class="space-y-1.5">
+            <Label>CEP</Label>
+            <Input v-model="form.cep" mascara="cep" placeholder="00000-000" />
           </div>
           <div class="sm:col-span-2">
             <Button :carregando="salvando" @click="salvar">

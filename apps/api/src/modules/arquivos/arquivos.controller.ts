@@ -1,8 +1,10 @@
 import { Controller, Delete, Get, Param, Post, Query, Req, Res } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { PerfilUsuario } from '@arcco/contratos';
 import { ArquivosService } from './arquivos.service';
 import { EmpresaAtual } from '../../common/decorators/empresa-atual.decorator';
 import { UsuarioAtual } from '../../common/decorators/usuario-atual.decorator';
+import { Perfis } from '../../common/decorators/perfis.decorator';
 import { Erros } from '../../common/erros/erros';
 import type { UsuarioAutenticado } from '../../common/auth/tipos';
 
@@ -71,6 +73,7 @@ export class ArquivosController {
       .send(buffer);
   }
 
+  @Perfis(PerfilUsuario.PROPRIETARIO, PerfilUsuario.GESTOR, PerfilUsuario.VENDEDOR)
   @Delete(':id')
   remover(@EmpresaAtual() empresaId: string, @Param('id') id: string) {
     return this.servico.remover(empresaId, id);

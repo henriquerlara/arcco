@@ -35,6 +35,13 @@ export interface MidiaParaEnvio {
   caption?: string;
 }
 
+/** Menu interativo Cloud API (reply buttons ≤3 ou lista). */
+export interface MenuInterativoEnvio {
+  body: string;
+  opcoes: Array<{ id: string; titulo: string; descricao?: string }>;
+  botaoLista?: string;
+}
+
 export interface WhatsAppProvider {
   readonly nome: string;
   enviarTexto(
@@ -48,10 +55,16 @@ export interface WhatsAppProvider {
     telefone: string,
     midia: MidiaParaEnvio,
   ): Promise<EnvioResultado>;
+  /** Opcional — menus interativos da Meta Cloud API. */
+  enviarInterativo?(
+    nomeInstancia: string,
+    telefone: string,
+    menu: MenuInterativoEnvio,
+  ): Promise<EnvioResultado>;
   conectar(nomeInstancia: string): Promise<ResultadoConexao>;
   desconectar(nomeInstancia: string): Promise<void>;
   statusConexao(nomeInstancia: string): Promise<ResultadoConexao>;
-  /** Baixa PDF/imagem/áudio do item Evolution. Ausente no mock. */
+  /** Baixa mídia recebida, quando o provedor expõe os bytes. */
   baixarMidia?(
     nomeInstancia: string,
     itemEvo: Record<string, unknown>,

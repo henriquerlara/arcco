@@ -9,3 +9,5 @@ export * from './conversas';
 export * from './configuracoes';
 export * from './arquivos';
 export * from './produtos-orcamentos';
+export * from './meta-whatsapp';
+export * from './notas-fiscais';

@@ -43,7 +43,7 @@ Metas do MVP:
   - Atividades (follow-up, ligação, reunião, etc. com vencimento e conclusão).
   - Campos personalizados por entidade (contato, obra, oportunidade).
 - **Atendimento WhatsApp:**
-  - Conexões (mock ou Evolution), inbox de conversas, envio manual por atendente.
+  - Conexões Meta Cloud API, inbox de conversas, envio manual por atendente.
   - Chatbot (máquina de estados determinística) com menu, coleta de orçamento e transferência.
   - Classificação de intenção por regras (offline) ou OpenAI.
 - **Dashboard:** métricas comerciais e gráfico de funil.
@@ -62,7 +62,6 @@ Itens conscientemente deixados para o [roadmap](ROADMAP.md):
 - **Estoque** e **entrega/logística**.
 - Integração com **ERP**.
 - **OCR** de documentos e **transcrição** de áudio.
-- Integração direta com a **Meta/WhatsApp Cloud API** (o MVP usa Evolution API).
 - **Relatórios avançados** e **billing/assinaturas** da própria plataforma.
 - Respostas livres geradas por IA (o LLM só classifica intenção).
 - Atualizações em tempo real via WebSocket (o inbox usa polling).
@@ -87,7 +86,7 @@ O cliente final não acessa o painel — interage apenas pelo WhatsApp, onde o c
 
 O fluxo central do MVP é **do primeiro contato no WhatsApp até uma oportunidade no funil**:
 
-1. **Mensagem recebida** — o cliente manda uma mensagem para o número da empresa. Ela chega via webhook da Evolution (`POST /api/webhooks/evolution`) ou pelo simulador (modo mock).
+1. **Mensagem recebida** — o cliente manda uma mensagem para o número da empresa. Ela chega via webhook da Meta (`POST /api/webhooks/meta/whatsapp`) ou pelo simulador.
 2. **Conversa criada/resolvida** — a API normaliza o telefone e resolve (ou cria) a `Conversa` e, quando possível, associa a um `Contato`.
 3. **Triagem pelo bot** — se a conversa está em modo `BOT`, o `ChatbotService` classifica a intenção (regras ou OpenAI) e a máquina de estados responde:
    - Saudação + **menu** (1 orçamento · 2 acompanhar · 3 dúvida · 4 atendente).

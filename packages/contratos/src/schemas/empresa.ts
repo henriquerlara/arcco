@@ -30,6 +30,8 @@ export const configuracoesEmpresaSchema = z.object({
   horarioAtendimento: horarioAtendimentoSchema,
   chatbot: chatbotConfigSchema,
   onboardingConcluido: z.boolean().optional().default(false),
+  /** Dias corridos até o follow-up automático após enviar orçamento. */
+  diasFollowUpOrcamento: z.number().int().min(1).max(30).optional().default(3),
 });
 
 export type HorarioAtendimento = z.infer<typeof horarioAtendimentoSchema>;
@@ -59,4 +61,5 @@ export const configuracoesEmpresaPadrao = (): ConfiguracoesEmpresa => ({
     textoPerguntaProjeto: 'a lista de materiais',
   },
   onboardingConcluido: false,
+  diasFollowUpOrcamento: 3,
 });

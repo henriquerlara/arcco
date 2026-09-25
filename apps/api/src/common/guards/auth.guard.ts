@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { FastifyRequest } from 'fastify';
-import { PrismaService } from '../../database/prisma.service';
+import { PlatformPrismaService } from '../../database/platform-prisma.service';
 import { JwtService, COOKIE_ACCESS } from '../auth/jwt.service';
 import { PUBLICO_CHAVE } from '../decorators/publico.decorator';
 import { Erros } from '../erros/erros';
@@ -11,7 +11,7 @@ import type { PerfilUsuario } from '@arcco/contratos';
 export class AuthGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtService,
-    private readonly prisma: PrismaService,
+    private readonly prisma: PlatformPrismaService,
     private readonly reflector: Reflector,
   ) {}
 

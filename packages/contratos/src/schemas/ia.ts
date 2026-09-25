@@ -20,15 +20,5 @@ export const extracaoDadosSchema = z.object({
   confianca: z.number().min(0).max(1).optional(),
 });
 
-export const resumoConversaSchema = z.object({
-  resumo: z.string(),
-  pontosChave: z.array(z.string()).optional(),
-});
-
-export const sugestaoRespostaSchema = z.object({
-  sugestao: z.string(),
-});
-
 export type IntencaoIa = z.infer<typeof intencaoIaSchema>;
 export type ExtracaoDados = z.infer<typeof extracaoDadosSchema>;
-export type ResumoConversa = z.infer<typeof resumoConversaSchema>;

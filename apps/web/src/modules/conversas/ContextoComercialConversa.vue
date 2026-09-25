@@ -18,7 +18,7 @@ const ROTULO_DADO_BOT: Record<string, string> = {
   codigoOrcamento: 'Código do orçamento',
   descricaoAjuste: 'O que deve mudar',
   cpf: 'CPF',
-  enderecoObra: 'Endereço da obra',
+  enderecoObra: 'Endereço do projeto',
   temProjeto: 'Possui projeto/lista?',
   arquivoRecebido: 'Arquivo/lista',
   cadastroEncontrado: 'Cadastro',
@@ -61,7 +61,7 @@ function rotuloDadoBot(chave: string): string {
       <!-- Contato -->
       <section v-if="contexto.contato" class="rounded-md border border-borda p-3">
         <p class="mb-2 flex items-center gap-1.5 text-xs font-semibold text-texto-secundario">
-          <User class="size-3.5" /> Contato
+          <User class="size-3.5" /> Pessoa
         </p>
         <RouterLink
           :to="`/app/contatos/${contexto.contato.id}`"
@@ -83,7 +83,7 @@ function rotuloDadoBot(chave: string): string {
       <!-- Obra -->
       <section v-if="contexto.obra" class="rounded-md border border-borda p-3">
         <p class="mb-2 flex items-center gap-1.5 text-xs font-semibold text-texto-secundario">
-          <Building2 class="size-3.5" /> Obra
+          <Building2 class="size-3.5" /> Projeto
         </p>
         <RouterLink
           :to="`/app/obras/${contexto.obra.id}`"
@@ -99,7 +99,7 @@ function rotuloDadoBot(chave: string): string {
       <!-- Oportunidade -->
       <section v-if="contexto.oportunidade" class="rounded-md border border-borda p-3">
         <p class="mb-2 flex items-center gap-1.5 text-xs font-semibold text-texto-secundario">
-          <Target class="size-3.5" /> Oportunidade
+          <Target class="size-3.5" /> Negócio
         </p>
         <RouterLink
           :to="`/app/oportunidades/${contexto.oportunidade.id}`"

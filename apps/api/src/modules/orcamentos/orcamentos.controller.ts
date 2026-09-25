@@ -7,7 +7,6 @@ import {
 } from '@arcco/contratos';
 import type { z } from 'zod';
 import { OrcamentosService } from './orcamentos.service';
-import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { EmpresaAtual } from '../../common/decorators/empresa-atual.decorator';
 import { UsuarioAtual } from '../../common/decorators/usuario-atual.decorator';
@@ -17,10 +16,7 @@ import { Erros } from '../../common/erros/erros';
 
 @Controller('orcamentos')
 export class OrcamentosController {
-  constructor(
-    private readonly servico: OrcamentosService,
-    private readonly whatsapp: WhatsAppService,
-  ) {}
+  constructor(private readonly servico: OrcamentosService) {}
 
   @Get()
   listar(
@@ -98,17 +94,6 @@ export class OrcamentosController {
     @Body(new ZodValidationPipe(enviarOrcamentoEstruturadoSchema))
     dto: z.infer<typeof enviarOrcamentoEstruturadoSchema>,
   ) {
-    const orcamento = await this.servico.prepararEnvio(empresaId, id, usuario.id);
-    const envio = await this.whatsapp.enviarOrcamento(
-      empresaId,
-      orcamento.oportunidadeId,
-      {
-        texto: dto.texto,
-        valorEstimado: orcamento.total,
-        arquivoId: orcamento.arquivoId,
-      },
-      usuario.id,
-    );
-    return { orcamento, envio };
+    return this.servico.enviar(empresaId, id, usuario.id, dto.texto);
   }
 }

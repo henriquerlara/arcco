@@ -6,6 +6,8 @@ build
 *.log
 .env
 .env.local
+.env.deploy
+.env.production
 .env.*.local
 coverage
 .vite
@@ -16,6 +18,7 @@ storage
 *.tsbuildinfo
 .idea
 .vscode
+apps/api/src/database/generated
 apps/api/prisma/*.db
 apps/api/prisma/*.db-journal
 apps/web/dist

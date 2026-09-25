@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 import {
   StatusOrcamento,
@@ -7,10 +7,13 @@ import {
   type itemOrcamentoInputSchema,
 } from '@arcco/contratos';
 import type { z } from 'zod';
+import { Prisma } from '@prisma/client';
+import { PlatformPrismaService } from '../../database/platform-prisma.service';
 import { PrismaService } from '../../database/prisma.service';
 import { Erros } from '../../common/erros/erros';
 import { ArquivosService } from '../arquivos/arquivos.service';
 import { ProdutosService } from '../produtos/produtos.service';
+import { WhatsAppService } from '../whatsapp/whatsapp.service';
 
 type ItemInput = z.infer<typeof itemOrcamentoInputSchema>;
 type CriarOrcamentoInput = z.infer<typeof criarOrcamentoSchema>;
@@ -20,14 +23,22 @@ const INCLUDE = {
   itens: { include: { produto: true }, orderBy: { ordem: 'asc' as const } },
 } as const;
 
+const INCLUDE_EMISSAO = {
+  itens: { include: { produto: true }, orderBy: { ordem: 'asc' as const } },
+  oportunidade: { include: { contato: true, etapa: true } },
+} as const;
+
 @Injectable()
 export class OrcamentosService {
   private readonly logger = new Logger(OrcamentosService.name);
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly platform: PlatformPrismaService,
     private readonly arquivos: ArquivosService,
     private readonly produtos: ProdutosService,
+    @Inject(forwardRef(() => WhatsAppService))
+    private readonly whatsapp: WhatsAppService,
   ) {}
 
   listarPorOportunidade(empresaId: string, oportunidadeId: string) {
@@ -35,6 +46,21 @@ export class OrcamentosService {
       where: { empresaId, oportunidadeId },
       include: INCLUDE,
       orderBy: { versao: 'desc' },
+    });
+  }
+
+  /** Leitura usada pela emissão de NF: orçamento, itens, oportunidade, contato e etapa. */
+  buscarParaEmissao(empresaId: string, id: string) {
+    return this.prisma.orcamento.findFirst({
+      where: { id, empresaId },
+      include: INCLUDE_EMISSAO,
+    });
+  }
+
+  exigirParaEmissao(empresaId: string, id: string) {
+    return this.prisma.orcamento.findFirstOrThrow({
+      where: { id, empresaId },
+      include: INCLUDE_EMISSAO,
     });
   }
 
@@ -69,6 +95,13 @@ export class OrcamentosService {
     const total = Math.max(0, subtotal - descontoValor);
 
     const criado = await this.prisma.$transaction(async (tx) => {
+      // Último orçamento montado passa a ser o vigente (mesmo sem envio WhatsApp).
+      if (itens.length > 0) {
+        await tx.orcamento.updateMany({
+          where: { oportunidadeId: dto.oportunidadeId, empresaId, vigente: true },
+          data: { vigente: false },
+        });
+      }
       const orc = await tx.orcamento.create({
         data: {
           empresaId,
@@ -76,7 +109,7 @@ export class OrcamentosService {
           numero,
           versao,
           status: StatusOrcamento.RASCUNHO,
-          vigente: false,
+          vigente: itens.length > 0,
           observacoes: dto.observacoes ?? null,
           descontoValor,
           subtotal,
@@ -116,11 +149,23 @@ export class OrcamentosService {
     const descontoValor = dto.descontoValor ?? atual.descontoValor;
     const total = Math.max(0, subtotal - descontoValor);
 
+    const qtdItens = itens?.length ?? atual.itens.length;
     await this.prisma.$transaction(async (tx) => {
       if (itens) {
         await tx.itemOrcamento.deleteMany({ where: { orcamentoId: id } });
         await tx.itemOrcamento.createMany({
           data: itens.map((item) => ({ ...item, orcamentoId: id })),
+        });
+      }
+      if (qtdItens > 0) {
+        await tx.orcamento.updateMany({
+          where: {
+            oportunidadeId: atual.oportunidadeId,
+            empresaId,
+            vigente: true,
+            id: { not: id },
+          },
+          data: { vigente: false },
         });
       }
       await tx.orcamento.update({
@@ -132,6 +177,7 @@ export class OrcamentosService {
           total,
           validadeEm: dto.validadeEm === undefined ? undefined : dto.validadeEm,
           arquivoId: null,
+          ...(qtdItens > 0 ? { vigente: true } : {}),
         },
       });
       await tx.oportunidade.update({
@@ -152,7 +198,7 @@ export class OrcamentosService {
       where: { id: orcamento.oportunidadeId, empresaId },
       include: { contato: true, obra: true },
     });
-    const empresa = await this.prisma.empresa.findUniqueOrThrow({ where: { id: empresaId } });
+    const empresa = await this.platform.empresa.findUniqueOrThrow({ where: { id: empresaId } });
 
     let logoBuffer: Buffer | null = null;
     if (empresa.logoArquivoId) {
@@ -164,13 +210,53 @@ export class OrcamentosService {
       }
     }
 
+    const responsavelId = oportunidade?.responsavelId;
+    const vendedor = responsavelId
+      ? await this.platform.usuario.findFirst({
+          where: { id: responsavelId, empresaId },
+          select: { nome: true, email: true },
+        })
+      : null;
+
+    const fiscal = (empresa.enderecoFiscal ?? {}) as {
+      logradouro?: string;
+      numero?: string;
+      bairro?: string;
+      municipio?: string;
+      uf?: string;
+      cep?: string;
+    };
+    const cepEmpresa = fiscal.cep?.replace(/\D/g, '') ?? '';
+    const cepFormatado =
+      cepEmpresa.length === 8 ? `${cepEmpresa.slice(0, 5)}-${cepEmpresa.slice(5)}` : fiscal.cep;
+    const ruaEmpresa = [fiscal.logradouro, fiscal.numero].filter(Boolean).join(', ');
+    const cidadeEmpresa = [fiscal.municipio || empresa.cidade, fiscal.uf || empresa.estado]
+      .filter(Boolean)
+      .join('/');
+    const enderecoEmpresa =
+      [ruaEmpresa, fiscal.bairro, cidadeEmpresa].filter(Boolean).join(', ') +
+        (cepFormatado ? `${ruaEmpresa || fiscal.bairro || cidadeEmpresa ? ' - ' : ''}CEP ${cepFormatado}` : '') ||
+      null;
+
+    const obra = oportunidade?.obra;
+    const enderecoObra = obra
+      ? [
+          [obra.endereco, obra.bairro].filter(Boolean).join(', '),
+          [obra.cidade, obra.estado].filter(Boolean).join('/'),
+          obra.cep,
+        ]
+          .filter(Boolean)
+          .join(' · ') || null
+      : null;
+
     const pdf = await this.renderizarPdf({
       empresa: {
         nome: empresa.nomeFantasia || empresa.nome,
         telefone: empresa.telefone,
-        cidade: empresa.cidade,
-        estado: empresa.estado,
+        endereco: enderecoEmpresa,
+        cnpj: empresa.cnpj,
       },
+      vendedor: vendedor ? { nome: vendedor.nome, email: vendedor.email } : null,
       logo: logoBuffer,
       orcamento: {
         numero: orcamento.numero,
@@ -179,8 +265,11 @@ export class OrcamentosService {
         subtotal: orcamento.subtotal,
         total: orcamento.total,
         validadeEm: orcamento.validadeEm,
+        criadoEm: orcamento.criadoEm,
+        observacoes: orcamento.observacoes,
         itens: orcamento.itens.map((i) => ({
           nome: i.nome,
+          sku: i.produto?.sku ?? null,
           unidade: i.unidade,
           quantidade: i.quantidade,
           precoUnitario: i.precoUnitario,
@@ -189,7 +278,9 @@ export class OrcamentosService {
         })),
       },
       cliente: oportunidade?.contato.nome ?? 'Cliente',
-      obra: oportunidade?.obra?.nome ?? null,
+      telefoneCliente: oportunidade?.contato.telefone ?? null,
+      obra: obra?.nome ?? null,
+      enderecoObra,
       numeroPedido: oportunidade?.codigo ?? '—',
     });
 
@@ -256,36 +347,110 @@ export class OrcamentosService {
     return this.obter(empresaId, id);
   }
 
+  async enviar(
+    empresaId: string,
+    id: string,
+    usuarioId: string,
+    texto: string,
+  ) {
+    const orcamento = await this.prepararEnvio(empresaId, id, usuarioId);
+    const envio = await this.whatsapp.enviarOrcamento(
+      empresaId,
+      orcamento.oportunidadeId,
+      {
+        texto,
+        valorEstimado: orcamento.total,
+        arquivoId: orcamento.arquivoId,
+      },
+      usuarioId,
+    );
+    return { orcamento, envio };
+  }
+
+  /**
+   * No fechamento GANHA: o último orçamento montado vira CONVERTIDO
+   * (mesmo se ainda for rascunho / sem envio WhatsApp).
+   */
   async converterNoFechamento(
     empresaId: string,
     oportunidadeId: string,
     usuarioId?: string | null,
   ) {
-    const vigente = await this.prisma.orcamento.findFirst({
+    return this.prisma.$transaction(async (tx) =>
+      this.converterOrcamentoFinal(tx, empresaId, oportunidadeId, usuarioId),
+    );
+  }
+
+  async converterOrcamentoFinal(
+    tx: Prisma.TransactionClient,
+    empresaId: string,
+    oportunidadeId: string,
+    usuarioId?: string | null,
+  ): Promise<string | null> {
+    const jaConvertido = await tx.orcamento.findFirst({
+      where: {
+        empresaId,
+        oportunidadeId,
+        status: StatusOrcamento.CONVERTIDO,
+      },
+      orderBy: { convertidoEm: 'desc' },
+    });
+    if (jaConvertido) return jaConvertido.id;
+
+    const candidatos = [
+      StatusOrcamento.ENVIADO,
+      StatusOrcamento.ACEITO,
+      StatusOrcamento.RASCUNHO,
+    ] as const;
+
+    let final = await tx.orcamento.findFirst({
       where: {
         empresaId,
         oportunidadeId,
         vigente: true,
-        status: { in: [StatusOrcamento.ENVIADO, StatusOrcamento.ACEITO] },
+        status: { in: [...candidatos] },
+      },
+      include: { itens: { select: { id: true } } },
+    });
+
+    if (!final || final.itens.length === 0) {
+      final = await tx.orcamento.findFirst({
+        where: {
+          empresaId,
+          oportunidadeId,
+          status: { in: [...candidatos] },
+          itens: { some: {} },
+        },
+        orderBy: [{ atualizadoEm: 'desc' }, { versao: 'desc' }],
+        include: { itens: { select: { id: true } } },
+      });
+    }
+
+    if (!final || final.itens.length === 0) return null;
+
+    await this.produtos.baixarPorOrcamento(
+      tx,
+      empresaId,
+      final.id,
+      oportunidadeId,
+      usuarioId,
+    );
+
+    await tx.orcamento.updateMany({
+      where: { oportunidadeId, empresaId, vigente: true, id: { not: final.id } },
+      data: { vigente: false },
+    });
+
+    await tx.orcamento.update({
+      where: { id: final.id },
+      data: {
+        status: StatusOrcamento.CONVERTIDO,
+        vigente: true,
+        convertidoEm: new Date(),
       },
     });
-    if (!vigente) return null;
 
-    await this.prisma.$transaction(async (tx) => {
-      await this.produtos.baixarPorOrcamento(
-        tx,
-        empresaId,
-        vigente.id,
-        oportunidadeId,
-        usuarioId,
-      );
-      await tx.orcamento.update({
-        where: { id: vigente.id },
-        data: { status: StatusOrcamento.CONVERTIDO, convertidoEm: new Date() },
-      });
-    });
-
-    return vigente.id;
+    return final.id;
   }
 
   async cancelarVigenteNoPerdido(empresaId: string, oportunidadeId: string) {
@@ -359,7 +524,7 @@ export class OrcamentosService {
       if (!item.produtoId) continue;
       const produto =
         item.produto ??
-        (await this.prisma.produto.findFirst({ where: { id: item.produtoId, empresaId } }));
+        (await this.produtos.buscar(empresaId, item.produtoId));
       if (!produto || !produto.controlaEstoque) continue;
       if (item.quantidade > produto.estoqueAtual) {
         avisos.push({
@@ -374,7 +539,13 @@ export class OrcamentosService {
   }
 
   private renderizarPdf(dados: {
-    empresa: { nome: string; telefone: string | null; cidade: string | null; estado: string | null };
+    empresa: {
+      nome: string;
+      telefone: string | null;
+      endereco: string | null;
+      cnpj: string | null;
+    };
+    vendedor: { nome: string; email: string } | null;
     logo: Buffer | null;
     orcamento: {
       numero: string;
@@ -383,8 +554,11 @@ export class OrcamentosService {
       subtotal: number;
       total: number;
       validadeEm: Date | null;
+      criadoEm: Date;
+      observacoes: string | null;
       itens: Array<{
         nome: string;
+        sku: string | null;
         unidade: string;
         quantidade: number;
         precoUnitario: number;
@@ -393,7 +567,9 @@ export class OrcamentosService {
       }>;
     };
     cliente: string;
+    telefoneCliente: string | null;
     obra: string | null;
+    enderecoObra: string | null;
     numeroPedido: string;
   }): Promise<Buffer> {
     return new Promise((resolve, reject) => {
@@ -405,52 +581,77 @@ export class OrcamentosService {
 
       const moeda = (v: number) =>
         v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const telefone = (valor: string | null | undefined) => {
+        if (!valor) return null;
+        const d = valor.replace(/\D/g, '');
+        const nacional =
+          d.startsWith('55') && (d.length === 12 || d.length === 13) ? d.slice(2) : d;
+        const comPais = nacional !== d;
+        let formatado: string | null = null;
+        if (nacional.length === 11) {
+          formatado = `(${nacional.slice(0, 2)}) ${nacional.slice(2, 7)}-${nacional.slice(7)}`;
+        } else if (nacional.length === 10) {
+          formatado = `(${nacional.slice(0, 2)}) ${nacional.slice(2, 6)}-${nacional.slice(6)}`;
+        }
+        if (!formatado) return valor;
+        return comPais ? `+55 ${formatado}` : formatado;
+      };
+      const cnpj = (valor: string | null | undefined) => {
+        if (!valor) return null;
+        const d = valor.replace(/\D/g, '');
+        if (d.length !== 14) return valor;
+        return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+      };
 
       if (dados.logo) {
         try {
-          doc.image(dados.logo, 48, 40, { fit: [120, 48] });
+          doc.image(dados.logo, 48, 40, { fit: [110, 72] });
         } catch {
           /* logo inválida — segue sem imagem */
         }
       }
 
-      doc
-        .fillColor('#073b42')
-        .fontSize(18)
-        .text(dados.empresa.nome, dados.logo ? 180 : 48, 48, { width: 360 });
-      doc
-        .fontSize(9)
-        .fillColor('#687473')
-        .text(
-          [dados.empresa.telefone, [dados.empresa.cidade, dados.empresa.estado].filter(Boolean).join(' / ')]
-            .filter(Boolean)
-            .join(' · ') || ' ',
-          dados.logo ? 180 : 48,
-          72,
-        );
+      const hx = dados.logo ? 172 : 48;
+      const cabecalho = [
+        dados.empresa.endereco,
+        telefone(dados.empresa.telefone),
+        cnpj(dados.empresa.cnpj) ? `CNPJ ${cnpj(dados.empresa.cnpj)}` : null,
+        dados.vendedor
+          ? `Vendedor: ${dados.vendedor.nome}${dados.vendedor.email ? ` · ${dados.vendedor.email}` : ''}`
+          : null,
+      ].filter(Boolean) as string[];
 
-      doc.moveDown(2);
-      doc.fillColor('#073b42').fontSize(14).text('Orçamento comercial', 48);
-      doc
-        .fontSize(10)
-        .fillColor('#12383b')
-        .text(`Nº orçamento: ${dados.orcamento.numero}  ·  versão ${dados.orcamento.versao}`)
-        .text(`Nº pedido: ${dados.numeroPedido}`)
-        .text(`Cliente: ${dados.cliente}`);
+      doc.fillColor('#073b42').fontSize(14).text(dados.empresa.nome, hx, 40, { width: 370 });
+      let hy = doc.y + 2;
+      doc.fontSize(8).fillColor('#12383b');
+      for (const linha of cabecalho) {
+        doc.text(linha, hx, hy, { width: 370 });
+        hy = doc.y + 1;
+      }
+
+      const inicio = Math.max(hy + 16, 108);
+      doc.fillColor('#073b42').fontSize(14).text('Orçamento comercial', 48, inicio);
+      doc.fontSize(10).fillColor('#12383b');
+      doc.text(
+        `Nº orçamento: ${dados.orcamento.numero}  ·  versão ${dados.orcamento.versao}  ·  ${dados.orcamento.criadoEm.toLocaleDateString('pt-BR')}`,
+      );
+      doc.text(`Nº pedido: ${dados.numeroPedido}`);
+      const foneCliente = telefone(dados.telefoneCliente);
+      doc.text(`Cliente: ${dados.cliente}${foneCliente ? `  ·  ${foneCliente}` : ''}`);
       if (dados.obra) doc.text(`Projeto: ${dados.obra}`);
+      if (dados.enderecoObra) doc.text(`Endereço: ${dados.enderecoObra}`, { width: 500 });
       if (dados.orcamento.validadeEm) {
-        doc.text(
-          `Validade: ${dados.orcamento.validadeEm.toLocaleDateString('pt-BR')}`,
-        );
+        doc.text(`Validade: ${dados.orcamento.validadeEm.toLocaleDateString('pt-BR')}`);
       }
 
       doc.moveDown();
       const y0 = doc.y;
       doc.fontSize(9).fillColor('#687473');
-      doc.text('Item', 48, y0, { width: 200 });
-      doc.text('Qtd', 250, y0, { width: 50 });
-      doc.text('Unit.', 300, y0, { width: 80 });
-      doc.text('Total', 450, y0, { width: 90, align: 'right' });
+      doc.text('Qtd', 48, y0, { width: 36 });
+      doc.text('Und.', 86, y0, { width: 36 });
+      doc.text('Item', 126, y0, { width: 210 });
+      doc.text('Unit.', 340, y0, { width: 90 });
+      doc.text('Total', 430, y0, { width: 117, align: 'right' });
       doc
         .moveTo(48, y0 + 14)
         .lineTo(547, y0 + 14)
@@ -458,17 +659,24 @@ export class OrcamentosService {
         .stroke();
 
       let y = y0 + 22;
-      doc.fillColor('#12383b').fontSize(10);
       for (const item of dados.orcamento.itens) {
-        if (y > 720) {
+        doc.fontSize(10).fillColor('#12383b');
+        const rotulo = item.sku ? `${item.nome}\n${item.sku}` : item.nome;
+        const altura = Math.max(16, doc.heightOfString(rotulo, { width: 200 }));
+        if (y + altura > 720) {
           doc.addPage();
           y = 48;
         }
-        doc.text(item.nome, 48, y, { width: 190 });
-        doc.text(`${item.quantidade} ${item.unidade}`, 250, y, { width: 50 });
-        doc.text(moeda(item.precoUnitario), 300, y, { width: 80 });
-        doc.text(moeda(item.totalLinha), 450, y, { width: 90, align: 'right' });
-        y += 22;
+        doc.text(String(item.quantidade), 48, y, { width: 36 });
+        doc.text(item.unidade, 86, y, { width: 36 });
+        doc.text(item.nome, 126, y, { width: 200 });
+        if (item.sku) {
+          doc.fontSize(8).fillColor('#687473').text(item.sku, 126, y + 12, { width: 200 });
+        }
+        doc.fontSize(10).fillColor('#12383b');
+        doc.text(moeda(item.precoUnitario), 340, y, { width: 90 });
+        doc.text(moeda(item.totalLinha), 430, y, { width: 117, align: 'right' });
+        y += item.sku ? altura + 8 : 22;
       }
 
       doc
@@ -493,14 +701,31 @@ export class OrcamentosService {
         .fillColor('#073b42')
         .fontSize(12)
         .text(`Total: ${moeda(dados.orcamento.total)}`, 350, y, { width: 190, align: 'right' });
+      y += 28;
 
+      const obs = dados.orcamento.observacoes?.trim();
+      if (obs) {
+        if (y > 700) {
+          doc.addPage();
+          y = 48;
+        }
+        doc.fontSize(9).fillColor('#687473').text('Observações', 48, y, { width: 500 });
+        y = doc.y + 2;
+        doc.fontSize(10).fillColor('#12383b').text(obs, 48, y, { width: 500 });
+        y = doc.y + 16;
+      }
+
+      if (y > 760) {
+        doc.addPage();
+        y = 48;
+      }
       doc
         .fontSize(8)
         .fillColor('#687473')
         .text(
           'Documento gerado pela ARCCO. Este orçamento não substitui nota fiscal.',
           48,
-          780,
+          Math.max(y, 780),
           { width: 500, align: 'center' },
         );
 

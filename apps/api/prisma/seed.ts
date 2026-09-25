@@ -1,4 +1,6 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
+import { PrismaClient as PlatformClient, Prisma as PlatformPrisma } from '../src/database/generated/platform';
+import { BANCO_EMPRESA_UNICO } from '../src/database/banco-empresa';
 import * as argon2 from 'argon2';
 import {
   PerfilUsuario,
@@ -23,6 +25,7 @@ import { normalizarTelefone } from '../src/common/utils/telefone';
  * para exercitar montagem/envio/PDF e baixa no Fechado.
  */
 const prisma = new PrismaClient();
+const platform = new PlatformClient();
 const SENHA_PADRAO = 'Arcco@123';
 
 interface EspecificacaoEmpresa {
@@ -74,10 +77,28 @@ const EMPRESAS: EspecificacaoEmpresa[] = [
 ];
 
 async function limparEmpresaExistente(emailProprietario: string): Promise<void> {
-  const dono = await prisma.usuario.findUnique({ where: { email: emailProprietario } });
-  if (dono) {
-    await prisma.empresa.delete({ where: { id: dono.empresaId } }).catch(() => undefined);
-  }
+  const dono = await platform.usuario.findUnique({ where: { email: emailProprietario } });
+  if (!dono) return;
+  const empresaId = dono.empresaId;
+  await prisma.notaFiscal.deleteMany({ where: { empresaId } });
+  await prisma.movimentacaoEstoque.deleteMany({ where: { empresaId } });
+  await prisma.mensagem.deleteMany({ where: { empresaId } });
+  await prisma.atividade.deleteMany({ where: { empresaId } });
+  await prisma.eventoOportunidade.deleteMany({ where: { empresaId } });
+  await prisma.historicoEtapaOportunidade.deleteMany({ where: { empresaId } });
+  await prisma.orcamento.deleteMany({ where: { empresaId } });
+  await prisma.oportunidade.deleteMany({ where: { empresaId } });
+  await prisma.conversa.deleteMany({ where: { empresaId } });
+  await prisma.conexaoWhatsApp.deleteMany({ where: { empresaId } });
+  await prisma.contatoObra.deleteMany({ where: { empresaId } });
+  await prisma.contato.deleteMany({ where: { empresaId } });
+  await prisma.obra.deleteMany({ where: { empresaId } });
+  await prisma.produto.deleteMany({ where: { empresaId } });
+  await prisma.campoPersonalizado.deleteMany({ where: { empresaId } });
+  await prisma.etapaFunil.deleteMany({ where: { empresaId } });
+  await prisma.categoria.deleteMany({ where: { empresaId } });
+  await prisma.arquivo.deleteMany({ where: { empresaId } });
+  await platform.empresa.delete({ where: { id: empresaId } }).catch(() => undefined);
 }
 
 async function semearNegocioTeste(params: {
@@ -323,7 +344,7 @@ async function semear(spec: EspecificacaoEmpresa): Promise<void> {
   config.chatbot.mensagemInicial =
     `Olá! Seja muito bem-vindo à ${spec.nomeFantasia}. Sou o assistente virtual da equipe e estou aqui para tornar o seu atendimento mais ágil e preciso. Em breve, um dos nossos especialistas estará com você. Como posso direcioná-lo hoje?`;
 
-  const empresa = await prisma.empresa.create({
+  const empresa = await platform.empresa.create({
     data: {
       nome: spec.nome,
       nomeFantasia: spec.nomeFantasia,
@@ -331,12 +352,15 @@ async function semear(spec: EspecificacaoEmpresa): Promise<void> {
       cidade: spec.cidade,
       estado: spec.estado,
       telefone: spec.telefone,
-      configuracoes: config as unknown as Prisma.InputJsonValue,
+      configuracoes: config as unknown as PlatformPrisma.InputJsonValue,
+      databaseHost: BANCO_EMPRESA_UNICO.host,
+      databasePort: BANCO_EMPRESA_UNICO.port,
+      databaseName: BANCO_EMPRESA_UNICO.name,
     },
   });
 
   const [, vendedor] = await Promise.all([
-    prisma.usuario.create({
+    platform.usuario.create({
       data: {
         empresaId: empresa.id,
         nome: spec.nomeProprietario,
@@ -345,7 +369,7 @@ async function semear(spec: EspecificacaoEmpresa): Promise<void> {
         perfil: PerfilUsuario.PROPRIETARIO,
       },
     }),
-    prisma.usuario.create({
+    platform.usuario.create({
       data: {
         empresaId: empresa.id,
         nome: spec.nomeVendedor,
@@ -354,7 +378,7 @@ async function semear(spec: EspecificacaoEmpresa): Promise<void> {
         perfil: PerfilUsuario.VENDEDOR,
       },
     }),
-    prisma.usuario.create({
+    platform.usuario.create({
       data: {
         empresaId: empresa.id,
         nome: spec.nomeAtendente,
@@ -413,9 +437,8 @@ async function semear(spec: EspecificacaoEmpresa): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  for (const spec of EMPRESAS) {
-    await semear(spec);
-  }
+  // Um database operacional por enquanto. A segunda demo espera o banco dela.
+  await semear(EMPRESAS[0]);
   // eslint-disable-next-line no-console
   console.log(`\nSeed OK. Senha: ${SENHA_PADRAO}`);
   // eslint-disable-next-line no-console
@@ -432,4 +455,5 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect();
+    await platform.$disconnect();
   });

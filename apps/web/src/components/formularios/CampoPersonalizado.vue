@@ -8,6 +8,7 @@ import Select from '@/components/ui/Select.vue';
 import Switch from '@/components/ui/Switch.vue';
 import Checkbox from '@/components/ui/Checkbox.vue';
 import Label from '@/components/ui/Label.vue';
+import { parsearMoeda } from '@/composables/formatadores';
 
 const props = defineProps<{
   campo: CampoPersonalizado;
@@ -77,11 +78,20 @@ function alternarMulti(opcao: string, marcado: boolean) {
     />
 
     <Input
-      v-else-if="campo.tipo === T.NUMERO || campo.tipo === T.MOEDA"
+      v-else-if="campo.tipo === T.MOEDA"
+      :id="`campo-${campo.chave}`"
+      :model-value="props.modelValue == null ? '' : Number(props.modelValue)"
+      mascara="moeda"
+      placeholder="0,00"
+      @update:model-value="(v) => emit('update:modelValue', parsearMoeda(v))"
+    />
+
+    <Input
+      v-else-if="campo.tipo === T.NUMERO"
       :id="`campo-${campo.chave}`"
       v-model="numeroTexto"
       type="number"
-      :placeholder="campo.tipo === T.MOEDA ? 'R$ 0,00' : '0'"
+      placeholder="0"
     />
 
     <Input

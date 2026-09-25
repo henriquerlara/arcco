@@ -20,6 +20,7 @@ type AtualizarProdutoInput = {
   estoqueMinimo?: number;
   controlaEstoque?: boolean;
   ativo?: boolean;
+  ncm?: string | null;
 };
 type EntradaEstoqueInput = z.infer<typeof entradaEstoqueSchema>;
 type AjusteEstoqueInput = z.infer<typeof ajusteEstoqueSchema>;
@@ -83,8 +84,12 @@ export class ProdutosService {
     };
   }
 
+  buscar(empresaId: string, id: string) {
+    return this.prisma.produto.findFirst({ where: { id, empresaId } });
+  }
+
   async obter(empresaId: string, id: string) {
-    const produto = await this.prisma.produto.findFirst({ where: { id, empresaId } });
+    const produto = await this.buscar(empresaId, id);
     if (!produto) throw Erros.naoEncontrado('PRODUTO_NAO_ENCONTRADO', 'Produto nao encontrado');
     return {
       ...produto,
@@ -114,6 +119,7 @@ export class ProdutosService {
           nome: dto.nome,
           descricao: dto.descricao ?? null,
           unidade: dto.unidade ?? 'un',
+          ncm: dto.ncm?.replace(/\D/g, '') || null,
           precoVenda: dto.precoVenda ?? 0,
           estoqueAtual: controla ? saldoInicial : 0,
           estoqueMinimo: dto.estoqueMinimo ?? 0,
@@ -149,6 +155,7 @@ export class ProdutosService {
         nome: dto.nome,
         descricao: dto.descricao,
         unidade: dto.unidade,
+        ncm: dto.ncm === undefined ? undefined : dto.ncm?.replace(/\D/g, '') || null,
         precoVenda: dto.precoVenda,
         estoqueMinimo: dto.estoqueMinimo,
         controlaEstoque: dto.controlaEstoque,

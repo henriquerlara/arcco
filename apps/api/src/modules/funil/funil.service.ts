@@ -43,7 +43,27 @@ export class FunilService {
   }
 
   async atualizar(empresaId: string, id: string, dto: AtualizarEtapaInput) {
-    await this.obter(empresaId, id);
+    const etapa = await this.obter(empresaId, id);
+    if (etapa.chaveSistema) {
+      if (dto.tipo !== undefined && dto.tipo !== etapa.tipo) {
+        throw Erros.invalido(
+          'ETAPA_SISTEMA_PROTEGIDA',
+          'Nao e permitido alterar o tipo de uma etapa de sistema',
+        );
+      }
+      if (dto.ativo === false) {
+        throw Erros.invalido(
+          'ETAPA_SISTEMA_PROTEGIDA',
+          'Nao e permitido desativar uma etapa de sistema',
+        );
+      }
+      if (dto.nome !== undefined && dto.nome !== etapa.nome) {
+        throw Erros.invalido(
+          'ETAPA_SISTEMA_PROTEGIDA',
+          'Nao e permitido renomear uma etapa de sistema',
+        );
+      }
+    }
     return this.prisma.etapaFunil.update({
       where: { id },
       data: { nome: dto.nome, ordem: dto.ordem, tipo: dto.tipo, ativo: dto.ativo },
@@ -54,10 +74,29 @@ export class FunilService {
     const ids = dto.etapas.map((e) => e.id);
     const existentes = await this.prisma.etapaFunil.findMany({
       where: { empresaId, id: { in: ids } },
-      select: { id: true },
+      select: { id: true, ordem: true, chaveSistema: true },
     });
     if (existentes.length !== ids.length) {
       throw Erros.invalido('ETAPAS_INVALIDAS', 'Uma ou mais etapas nao pertencem a empresa');
+    }
+
+    const porId = new Map(existentes.map((e) => [e.id, e]));
+    const sistemaAntes = existentes
+      .filter((e) => e.chaveSistema)
+      .sort((a, b) => a.ordem - b.ordem)
+      .map((e) => e.id);
+    const sistemaDepois = dto.etapas
+      .filter((e) => porId.get(e.id)?.chaveSistema)
+      .sort((a, b) => a.ordem - b.ordem)
+      .map((e) => e.id);
+    if (
+      sistemaAntes.length !== sistemaDepois.length ||
+      sistemaAntes.some((id, i) => id !== sistemaDepois[i])
+    ) {
+      throw Erros.invalido(
+        'ETAPA_SISTEMA_PROTEGIDA',
+        'Nao e permitido alterar a ordem relativa das etapas de sistema',
+      );
     }
 
     await this.prisma.$transaction(
@@ -69,7 +108,13 @@ export class FunilService {
   }
 
   async excluir(empresaId: string, id: string, dto: ExcluirInput) {
-    await this.obter(empresaId, id);
+    const etapa = await this.obter(empresaId, id);
+    if (etapa.chaveSistema) {
+      throw Erros.invalido(
+        'ETAPA_SISTEMA_PROTEGIDA',
+        'Nao e permitido excluir uma etapa de sistema',
+      );
+    }
     if (id === dto.etapaDestinoId) {
       throw Erros.invalido('ETAPA_DESTINO_INVALIDA', 'A etapa de destino deve ser diferente');
     }

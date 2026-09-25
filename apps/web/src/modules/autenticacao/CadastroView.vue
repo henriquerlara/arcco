@@ -97,7 +97,7 @@ const aoEnviar = handleSubmit(async (valores) => {
         </div>
         <div class="space-y-1.5">
           <Label for="telefone">Telefone</Label>
-          <Input id="telefone" v-model="telefone" v-bind="telefoneAttrs" placeholder="(11) 90000-0000" />
+          <Input id="telefone" v-model="telefone" v-bind="telefoneAttrs" mascara="telefone" placeholder="(11) 90000-0000" />
         </div>
       </div>
 
@@ -135,7 +135,7 @@ const aoEnviar = handleSubmit(async (valores) => {
         </div>
         <div class="space-y-1.5">
           <Label for="estado">Estado</Label>
-          <Input id="estado" v-model="estado" v-bind="estadoAttrs" placeholder="UF" />
+          <Input id="estado" v-model="estado" v-bind="estadoAttrs" mascara="uf" placeholder="UF" />
         </div>
       </div>
 

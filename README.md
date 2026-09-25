@@ -17,7 +17,7 @@ O objetivo do MVP é centralizar contatos, obras, oportunidades (funil de vendas
 - [Migrations e seed](#migrations-e-seed)
 - [Execução (frontend e API)](#execução-frontend-e-api)
 - [Modo mock do WhatsApp](#modo-mock-do-whatsapp)
-- [Integrações: Evolution, R2, OpenAI, OpenTelemetry](#integrações-evolution-r2-openai-opentelemetry)
+- [Integrações: Meta, R2, OpenAI, OpenTelemetry](#integrações-meta-r2-openai-opentelemetry)
 - [Testes](#testes)
 - [Build](#build)
 - [Contas demonstrativas](#contas-demonstrativas)
@@ -38,14 +38,17 @@ O produto é composto por três pacotes em um monorepo pnpm:
 - **`apps/api`** — API em NestJS sobre Fastify, com Prisma/SQLite local. Expõe as rotas REST sob o prefixo `/api`, cuida de autenticação (JWT em cookies httpOnly), isolamento multiempresa, timeline de eventos, chatbot e integração com o WhatsApp.
 - **`packages/contratos`** — biblioteca compartilhada de **schemas Zod, tipos e enums** consumida tanto pela API quanto pelo frontend, garantindo contratos únicos entre back e front.
 
-Principais capacidades do MVP:
+Principais capacidades:
 
-- Cadastro/login de empresa com onboarding e templates por segmento.
-- CRM: contatos, obras, oportunidades, funil (pipeline kanban), atividades e campos personalizados.
-- Dashboard com métricas e gráfico de funil.
-- Inbox de conversas de WhatsApp com bot + atendimento humano.
-- Chatbot determinístico (máquina de estados) com classificação de intenção por regras ou OpenAI.
+- Cadastro/login de empresa com onboarding, checklist de setup e templates por segmento.
+- CRM: contatos, obras, oportunidades (criação manual e pelo bot), funil kanban com filtros, agenda e campos personalizados.
+- Orçamento estruturado (itens, PDF, envio WhatsApp) e estoque com alerta de mínimo.
+- Dashboard com métricas, alertas acionáveis e follow-up de negócio parado.
+- Inbox de conversas (bot vs atendente, status de entrega na Meta) e chatbot de triagem.
+- WhatsApp via Meta Cloud API.
+- Nota fiscal via Focus NFe (fluxo de emissão em evolução).
 - Upload de arquivos com armazenamento local ou Cloudflare R2.
+- Perfis (proprietário, gestor, vendedor, atendente) com restrição de exclusão e de configuração.
 - Observabilidade via OpenTelemetry (opcional).
 
 ---
@@ -68,7 +71,7 @@ Principais capacidades do MVP:
 - NestJS 10 sobre `@nestjs/platform-fastify`
 - Prisma 6 + PostgreSQL
 - Autenticação com `jose` (JWT) e `argon2` (hash de senha)
-- `@fastify/cookie`, `@fastify/cors`, `@fastify/helmet`, `@fastify/multipart`, `@fastify/static`
+- `@fastify/cookie`, `@fastify/cors`, `@fastify/helmet`, `@fastify/multipart`
 - Zod (validação de entrada e de env)
 - OpenAI SDK (classificação de intenção opcional)
 - AWS SDK S3 + presigner (Cloudflare R2)
@@ -85,7 +88,7 @@ Principais capacidades do MVP:
 
 - **Node.js 20+** (o monorepo declara `"engines": { "node": ">=20" }`)
 - **pnpm 9** (`packageManager: pnpm@9.15.9`)
-- Opcional: Docker (somente para a Evolution API/WhatsApp real), conta OpenAI, bucket Cloudflare R2 e coletor OpenTelemetry
+- Opcional: conta OpenAI, bucket Cloudflare R2 e coletor OpenTelemetry
 
 Instalar o pnpm, se necessário:
 
@@ -133,11 +136,7 @@ JWT_ACCESS_SECRET=altere-este-segredo-access-em-producao-min-32
 JWT_REFRESH_SECRET=altere-este-segredo-refresh-em-producao-min-32
 JWT_ACCESS_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
-WHATSAPP_PROVIDER=evolution
-EVOLUTION_API_URL=http://127.0.0.1:8080
-EVOLUTION_API_KEY=arcco-evolution-dev-key-change-me
-EVOLUTION_WEBHOOK_SECRET=arcco-webhook-secret-dev-change-me
-API_PUBLIC_URL=http://host.docker.internal:3000
+API_PUBLIC_URL=http://localhost:3000
 AI_PROVIDER=rules
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
@@ -156,7 +155,7 @@ VITE_API_URL=http://localhost:3000
 VITE_APP_NAME=ARCCO
 ```
 
-Se precisar de WhatsApp real, suba apenas a stack opcional da Evolution com `docker compose up -d`.
+Se precisar de WhatsApp real, configure o token da Meta Cloud API (`META_WHATSAPP_*`) e o webhook em `/api/webhooks/meta/whatsapp`.
 Descrição das variáveis (validadas por Zod em `apps/api/src/config/env.ts`):
 
 | Variável | Obrigatória | Padrão | Descrição |
@@ -168,11 +167,7 @@ Descrição das variáveis (validadas por Zod em `apps/api/src/config/env.ts`):
 | `JWT_REFRESH_SECRET` | **sim** | — | Segredo do refresh token |
 | `JWT_ACCESS_EXPIRES_IN` | não | `15m` | Validade do access token |
 | `JWT_REFRESH_EXPIRES_IN` | não | `7d` | Validade do refresh token |
-| `WHATSAPP_PROVIDER` | não | `mock` | `mock` \| `evolution` (dev local usa `evolution`) |
-| `EVOLUTION_API_URL` | não | `` | URL base da Evolution API (`http://127.0.0.1:8080`) |
-| `EVOLUTION_API_KEY` | não | `` | API key da Evolution (igual a `AUTHENTICATION_API_KEY`) |
-| `EVOLUTION_WEBHOOK_SECRET` | não | `` | Segredo validado no header `x-webhook-secret` |
-| `API_PUBLIC_URL` | não | `http://localhost:3000` | URL da API vista pela Evolution (`host.docker.internal` no Docker) |
+| `API_PUBLIC_URL` | não | `http://localhost:3000` | URL pública da API (links de arquivo) |
 | `AI_PROVIDER` | não | `rules` | `rules` (offline) \| `openai` |
 | `OPENAI_API_KEY` | não | `` | Chave da OpenAI (quando `AI_PROVIDER=openai`) |
 | `OPENAI_MODEL` | não | `gpt-4o-mini` | Modelo usado na classificação de intenção |
@@ -234,9 +229,9 @@ pnpm dev:web
 
 ---
 
-## Modo mock do WhatsApp
+## Simulador do chatbot
 
-Por padrão `WHATSAPP_PROVIDER=mock`. Nesse modo **nenhuma mensagem é enviada de verdade**: o provider mock apenas registra em log e devolve ids simulados, e as conexões aparecem sempre como `CONECTADO`. Isso permite testar todo o fluxo de chatbot/atendimento sem uma conta real de WhatsApp.
+O simulador local **não envia mensagem de verdade**: registra a conversa e faz o bot responder no CRM. O canal real é a Meta Cloud API.
 
 Para simular uma mensagem recebida e ver o bot responder, use o endpoint de simulação (autenticado):
 
@@ -249,21 +244,17 @@ POST /api/whatsapp/simulador/mensagem
 }
 ```
 
-Ele garante uma instância mock para a empresa e processa a mensagem pelo mesmo caminho do webhook real (`WhatsAppService.processarMensagemRecebida`). Mais detalhes em [`docs/EVOLUTION_API.md`](docs/EVOLUTION_API.md) e [`docs/CHATBOT.md`](docs/CHATBOT.md).
+Ele garante uma instância mock para a empresa e processa a mensagem pelo mesmo caminho do webhook da Meta (`WhatsAppService.processarMensagemRecebida`). Mais detalhes em [`docs/CHATBOT.md`](docs/CHATBOT.md).
 
 ---
 
-## Integrações: Evolution, R2, OpenAI, OpenTelemetry
+## Integrações: Meta, R2, OpenAI, OpenTelemetry
 
-### Evolution API (WhatsApp real)
+### Meta Cloud API (WhatsApp)
 
-O projeto já vem preparado para Evolution (`WHATSAPP_PROVIDER=evolution` no `.env`).
+O canal oficial é a WhatsApp Cloud API. Configure `META_WHATSAPP_ACCESS_TOKEN`, `META_WHATSAPP_PHONE_NUMBER_ID`, `META_WHATSAPP_WABA_ID` e `META_WHATSAPP_VERIFY_TOKEN`. O webhook público é `POST /api/webhooks/meta/whatsapp`.
 
-1. Abra o Docker Desktop e rode `docker compose up -d` (somente a stack da Evolution).
-2. Suba a API (`pnpm dev:api`) e o web (`pnpm dev:web`).
-3. Em **Configurações → WhatsApp**, crie a conexão e escaneie o QR.
-
-A API cria a instância na Evolution e configura o webhook em `{API_PUBLIC_URL}/api/webhooks/evolution` automaticamente. Guia completo: [`docs/EVOLUTION_API.md`](docs/EVOLUTION_API.md).
+Em **Configurações → WhatsApp**, use o painel da Meta para garantir a conexão de teste e enviar o template inicial.
 
 ### Cloudflare R2 (armazenamento de arquivos)
 
@@ -343,8 +334,9 @@ O seed também cria usuários vendedor e atendente para cada empresa (ex.: `vend
 - **Sem envio de mídia pelo bot:** o processamento trata mensagens de **texto**; anexos/mídia recebidos não são interpretados.
 - **Sem tempo real (WebSocket):** o inbox usa polling via TanStack Query; não há push por socket.
 - **OpenAI limitado à classificação de intenção** (não gera respostas livres).
-- **Sem orçamento/pedido/financeiro/NF/estoque** — são itens de roadmap (ver [`docs/ROADMAP.md`](docs/ROADMAP.md)).
-- **Perfis básicos** (PROPRIETARIO, GESTOR, VENDEDOR, ATENDENTE) com regras de acesso simples.
+- **Orçamento e estoque já existem** no CRM. Pedido/financeiro completo e NF em produção ainda não: a emissão Focus é WIP e não deve ser tratada como nota autorizada de verdade sem homologação.
+- **Meta Cloud API** em evolução (envio de texto/template e status de entrega/leitura). Mídia pelo canal oficial e inbox em tempo real ainda não estão fechados.
+- **Perfis** (PROPRIETARIO, GESTOR, VENDEDOR, ATENDENTE): atendente não exclui registros nem acessa configurações, produtos ou estoque.
 - **Idempotência de mensagens** via `@@unique([conversaId, idExterno])`, mas sem fila/reprocessamento robusto.
 
 ---
@@ -367,7 +359,7 @@ O modo suportado prioriza execução local. Em empacotamentos ou servidores pró
 - Build: `pnpm build:api`. Start: `pnpm --filter @arcco/api start` (executa `node dist/main.js`).
 - Rode as migrations em produção: `pnpm --filter @arcco/api exec prisma migrate deploy`.
 - Variáveis: todas da seção API do `.env`, com `NODE_ENV=production`, segredos JWT fortes (32+ chars), `FRONTEND_URL` apontando para o domínio da Vercel e `API_PUBLIC_URL` para o domínio público da API.
-- Se usar WhatsApp real, configure `WHATSAPP_PROVIDER=evolution` e o webhook da Evolution para `https://<sua-api>/api/webhooks/evolution`.
+- WhatsApp real: credenciais `META_WHATSAPP_*` e webhook da Meta em `https://<sua-api>/api/webhooks/meta/whatsapp`.
 
 ### Banco
 
@@ -463,10 +455,9 @@ pnpm --filter @arcco/web preview
 - [`docs/MVP.md`](docs/MVP.md) — problema, objetivo, escopo, personas e fluxo principal
 - [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) — estrutura, decisões, multiempresa, autenticação e integrações
 - [`docs/BANCO_DE_DADOS.md`](docs/BANCO_DE_DADOS.md) — modelo de dados (14 tabelas), relacionamentos e índices
-- [`docs/EVOLUTION_API.md`](docs/EVOLUTION_API.md) — integração WhatsApp (Evolution), webhook, segurança e mock
 - [`docs/CHATBOT.md`](docs/CHATBOT.md) — intenções, estados, fluxos e limites da IA
 - [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) — paleta, tipografia, tokens e componentes
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — evolução planejada (orçamento, pedidos, financeiro, NF, estoque, etc.)
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — evolução planejada (pedido, financeiro, NF em produção, tempo real)
 
 ---
 

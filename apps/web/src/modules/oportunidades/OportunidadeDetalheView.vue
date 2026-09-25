@@ -41,9 +41,12 @@ import {
   servicoArquivos,
 } from '@/services';
 import PainelOrcamento from './PainelOrcamento.vue';
+import PainelNotaFiscal from './PainelNotaFiscal.vue';
 import { formatarMoeda, formatarData, formatarDataHora, parsearMoeda } from '@/composables/formatadores';
 import { lerAjustes } from '@/composables/ajustes';
 import { useNotificacao } from '@/composables/useNotificacao';
+import { useAutenticacaoStore } from '@/stores/autenticacao';
+import { PerfilUsuario } from '@arcco/contratos';
 import type {
   EtapaFunil,
   HistoricoEtapaOportunidade,
@@ -73,7 +76,12 @@ interface PassoProcesso {
 const rota = useRoute();
 const router = useRouter();
 const queryClient = useQueryClient();
+const auth = useAutenticacaoStore();
 const { notificarErro, sucesso } = useNotificacao();
+
+const podeExcluir = computed(() =>
+  auth.temPerfil(PerfilUsuario.PROPRIETARIO, PerfilUsuario.GESTOR, PerfilUsuario.VENDEDOR),
+);
 
 const id = computed(() => rota.params.id as string);
 const confirmarExclusao = ref(false);
@@ -164,7 +172,7 @@ const ROTULOS_INFO_BOT: Record<string, string> = {
   ajuste_status: 'Status do ajuste',
   cpf: 'CPF',
   cadastro: 'Cadastro',
-  endereco_obra: 'Endereço da obra',
+  endereco_obra: 'Endereço do projeto',
   possui_projeto: 'Possui projeto/lista?',
   arquivo_lista: 'Arquivo/lista',
 };
@@ -597,7 +605,7 @@ async function enviarOrcamento() {
       arquivoId = salvo.id;
     }
     await servicoConversas.enviarOrcamento(id.value, { texto, valorEstimado: valor, arquivoId });
-    sucesso('Orçamento enviado. Oportunidade avançou para Negociação.');
+    sucesso('Orçamento enviado. O negócio avançou para Negociação.');
     modalOrcamentoAberto.value = false;
     await refetch();
     await queryClient.invalidateQueries({ queryKey: ['pipeline'] });
@@ -613,7 +621,7 @@ async function excluir() {
   excluindo.value = true;
   try {
     await servicoOportunidades.excluir(id.value);
-    sucesso('Oportunidade excluída.');
+    sucesso('Negócio excluído.');
     await queryClient.invalidateQueries({ queryKey: ['pipeline'] });
     await router.back();
   } catch (e) {
@@ -677,7 +685,12 @@ async function excluir() {
             <Send class="size-4" />
             Orçamento
           </Button>
-          <Button variante="contorno" tamanho="icone" @click="confirmarExclusao = true">
+          <Button
+            v-if="podeExcluir"
+            variante="contorno"
+            tamanho="icone"
+            @click="confirmarExclusao = true"
+          >
             <Trash2 class="size-4 text-erro" />
           </Button>
         </div>
@@ -788,6 +801,18 @@ async function excluir() {
               @atualizado="refetch()"
             />
           </div>
+
+          <PainelNotaFiscal
+            :oportunidade-id="op.id"
+            :orcamento-id="orcamentoResumo?.id ?? null"
+            :orcamento-convertido="orcamentoResumo?.status === 'CONVERTIDO'"
+            :orcamento-elegivel="
+              !!orcamentoResumo &&
+              orcamentoResumo.itens.length > 0 &&
+              ['RASCUNHO', 'ENVIADO', 'ACEITO', 'CONVERTIDO'].includes(orcamentoResumo.status)
+            "
+            :oportunidade-ganha="op.etapa?.tipo === 'GANHA'"
+          />
 
           <Card>
             <CardHeader>
@@ -993,8 +1018,8 @@ async function excluir() {
                 <Input
                   id="valor-negocio"
                   v-model="valorNegocio"
+                  mascara="moeda"
                   placeholder="0,00"
-                  inputmode="decimal"
                   autocomplete="off"
                   @keydown.enter.prevent="salvarValorNegocio"
                 />
@@ -1050,11 +1075,11 @@ async function excluir() {
           <Label>Valor do orçamento</Label>
           <Input
             v-model="valorOrcamento"
+            mascara="moeda"
             placeholder="0,00"
-            inputmode="decimal"
             autocomplete="off"
           />
-          <p class="text-xs text-texto-secundario">Esse valor é o que aparece no card do pipeline.</p>
+          <p class="text-xs text-texto-secundario">Esse valor é o que aparece no card do negócio.</p>
         </div>
         <div class="space-y-1.5">
           <Label>Arquivo (PDF ou imagem)</Label>
@@ -1120,7 +1145,7 @@ async function excluir() {
 
     <ModalConfirmacao
       v-model="confirmarExclusao"
-      titulo="Excluir oportunidade?"
+      titulo="Excluir negócio?"
       descricao="Esta ação não poderá ser desfeita."
       texto-confirmar="Excluir"
       perigo

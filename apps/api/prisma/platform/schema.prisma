@@ -1,0 +1,73 @@
+// Banco da plataforma. Não guarda pessoas, obras, negócios, estoque nem orçamento.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../src/database/generated/platform"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("PLATFORM_DATABASE_URL")
+}
+
+enum PerfilUsuario {
+  PROPRIETARIO
+  GESTOR
+  VENDEDOR
+  ATENDENTE
+}
+
+enum SegmentoEmpresa {
+  ILUMINACAO
+  PISOS_REVESTIMENTOS
+  ESQUADRIAS
+  CONCRETO
+  MATERIAIS_CONSTRUCAO
+  SERVICOS_OBRAS
+  OUTRO
+}
+
+model Empresa {
+  id                String          @id @default(uuid())
+  nome              String
+  nomeFantasia      String?
+  segmento          SegmentoEmpresa @default(OUTRO)
+  telefone          String?
+  cidade            String?
+  estado            String?
+  logoArquivoId     String?
+  cnpj              String?
+  inscricaoEstadual String?
+  enderecoFiscal    Json?
+  configuracoes     Json            @default("{}")
+  /// Onde está o database operacional desta empresa.
+  databaseHost      String          @default("localhost")
+  databasePort      Int             @default(5432)
+  databaseName      String
+  criadoEm          DateTime        @default(now())
+  atualizadoEm      DateTime        @updatedAt
+
+  usuarios Usuario[]
+
+  @@map("empresas")
+}
+
+model Usuario {
+  id              String        @id @default(uuid())
+  empresaId       String
+  nome            String
+  email           String        @unique
+  senhaHash       String
+  perfil          PerfilUsuario @default(VENDEDOR)
+  ativo           Boolean       @default(true)
+  deveTrocarSenha Boolean       @default(false)
+  versaoSessao    Int           @default(0)
+  ultimoAcessoEm  DateTime?
+  criadoEm        DateTime      @default(now())
+  atualizadoEm    DateTime      @updatedAt
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId])
+  @@map("usuarios")
+}

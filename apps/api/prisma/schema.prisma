@@ -1,33 +1,16 @@
-// ARCCO — Esquema Prisma (MVP)
-// Nomes de modelos em PascalCase (portugues) e tabelas em snake_case.
+// Database operacional da empresa (segmento construção), por enquanto um só: db_empresa_arcco.
+// Empresa e usuário ficam em prisma/platform.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./arcco.db"
+  provider = "postgresql"
+  url      = env("EMPRESA_DATABASE_URL")
 }
 
 // ======================= ENUMS =======================
-
-enum PerfilUsuario {
-  PROPRIETARIO
-  GESTOR
-  VENDEDOR
-  ATENDENTE
-}
-
-enum SegmentoEmpresa {
-  ILUMINACAO
-  PISOS_REVESTIMENTOS
-  ESQUADRIAS
-  CONCRETO
-  MATERIAIS_CONSTRUCAO
-  SERVICOS_OBRAS
-  OUTRO
-}
 
 enum TipoContato {
   PROPRIETARIO_OBRA
@@ -79,8 +62,8 @@ enum TipoAtividade {
 }
 
 enum ProvedorWhatsApp {
-  EVOLUTION
   MOCK
+  META
 }
 
 enum StatusConexaoWhatsApp {
@@ -153,6 +136,14 @@ enum StatusOrcamento {
   CONVERTIDO
 }
 
+enum StatusNotaFiscal {
+  RASCUNHO
+  PROCESSANDO
+  AUTORIZADA
+  REJEITADA
+  CANCELADA
+}
+
 enum TipoMovimentacaoEstoque {
   ENTRADA
   BAIXA
@@ -160,61 +151,6 @@ enum TipoMovimentacaoEstoque {
 }
 
 // ======================= MODELOS =======================
-
-model Empresa {
-  id            String          @id @default(uuid())
-  nome          String
-  nomeFantasia  String?
-  segmento      SegmentoEmpresa @default(OUTRO)
-  telefone      String?
-  cidade        String?
-  estado        String?
-  logoArquivoId String?
-  configuracoes Json            @default("{}")
-  criadoEm      DateTime        @default(now())
-  atualizadoEm  DateTime        @updatedAt
-
-  usuarios             Usuario[]
-  contatos             Contato[]
-  obras                Obra[]
-  contatosObras        ContatoObra[]
-  categorias           Categoria[]
-  etapasFunil          EtapaFunil[]
-  oportunidades        Oportunidade[]
-  historicosEtapa      HistoricoEtapaOportunidade[]
-  eventosOportunidade  EventoOportunidade[]
-  atividades           Atividade[]
-  conexoes             ConexaoWhatsApp[]
-  conversas            Conversa[]
-  mensagens            Mensagem[]
-  arquivos             Arquivo[]
-  camposPersonalizados CampoPersonalizado[]
-  produtos             Produto[]
-  orcamentos           Orcamento[]
-  movimentacoesEstoque MovimentacaoEstoque[]
-
-  @@map("empresas")
-}
-
-model Usuario {
-  id             String        @id @default(uuid())
-  empresaId      String
-  nome           String
-  email          String        @unique
-  senhaHash      String
-  perfil         PerfilUsuario @default(VENDEDOR)
-  ativo          Boolean       @default(true)
-  deveTrocarSenha Boolean      @default(false)
-  versaoSessao   Int           @default(0)
-  ultimoAcessoEm DateTime?
-  criadoEm       DateTime      @default(now())
-  atualizadoEm   DateTime      @updatedAt
-
-  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-
-  @@index([empresaId])
-  @@map("usuarios")
-}
 
 model Contato {
   id                  String      @id @default(uuid())
@@ -225,6 +161,8 @@ model Contato {
   email               String?
   tipo                TipoContato @default(OUTRO)
   empresaNome         String?
+  /// CPF ou CNPJ do destinatário fiscal (dígitos).
+  documento           String?
   origem              String?
   observacoes         String?
   responsavelId       String?
@@ -232,7 +170,6 @@ model Contato {
   criadoEm            DateTime    @default(now())
   atualizadoEm        DateTime    @updatedAt
 
-  empresa       Empresa       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   oportunidades Oportunidade[]
   atividades    Atividade[]
   contatosObras ContatoObra[]
@@ -263,7 +200,6 @@ model Obra {
   criadoEm            DateTime   @default(now())
   atualizadoEm        DateTime   @updatedAt
 
-  empresa       Empresa       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   oportunidades Oportunidade[]
   atividades    Atividade[]
   contatosObras ContatoObra[]
@@ -281,7 +217,6 @@ model ContatoObra {
   papel     String
   criadoEm  DateTime @default(now())
 
-  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   contato Contato @relation(fields: [contatoId], references: [id], onDelete: Cascade)
   obra    Obra    @relation(fields: [obraId], references: [id], onDelete: Cascade)
 
@@ -302,7 +237,6 @@ model Categoria {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  empresa       Empresa       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   oportunidades Oportunidade[]
 
   @@index([empresaId])
@@ -321,7 +255,6 @@ model EtapaFunil {
   criadoEm     DateTime       @default(now())
   atualizadoEm DateTime       @updatedAt
 
-  empresa       Empresa       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   oportunidades Oportunidade[]
 
   @@unique([empresaId, chaveSistema])
@@ -354,7 +287,6 @@ model Oportunidade {
   criadoEm            DateTime               @default(now())
   atualizadoEm        DateTime               @updatedAt
 
-  empresa    Empresa    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   contato    Contato    @relation(fields: [contatoId], references: [id], onDelete: Cascade)
   obra       Obra?      @relation(fields: [obraId], references: [id])
   categoria  Categoria? @relation(fields: [categoriaId], references: [id])
@@ -363,6 +295,7 @@ model Oportunidade {
   historicoEtapas HistoricoEtapaOportunidade[]
   eventos         EventoOportunidade[]
   orcamentos      Orcamento[]
+  notasFiscais    NotaFiscal[]
 
   @@unique([empresaId, codigo])
   @@index([empresaId])
@@ -384,7 +317,6 @@ model HistoricoEtapaOportunidade {
   usuarioId         String?
   criadoEm          DateTime             @default(now())
 
-  empresa      Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   oportunidade Oportunidade @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
 
   @@index([empresaId])
@@ -405,7 +337,6 @@ model EventoOportunidade {
   usuarioId      String?
   criadoEm       DateTime @default(now())
 
-  empresa      Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   oportunidade Oportunidade @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
 
   @@index([empresaId, criadoEm])
@@ -429,7 +360,6 @@ model Atividade {
   criadoEm       DateTime      @default(now())
   atualizadoEm   DateTime      @updatedAt
 
-  empresa      Empresa       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   oportunidade Oportunidade? @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
   contato      Contato?      @relation(fields: [contatoId], references: [id], onDelete: Cascade)
   obra         Obra?         @relation(fields: [obraId], references: [id], onDelete: Cascade)
@@ -442,22 +372,27 @@ model Atividade {
 }
 
 model ConexaoWhatsApp {
-  id           String                @id @default(uuid())
-  empresaId    String
-  nomeInstancia String               @unique
-  provedor     ProvedorWhatsApp      @default(MOCK)
-  status       StatusConexaoWhatsApp @default(DESCONECTADO)
-  numero       String?
-  qrCode       String?
-  ultimoErro   String?
-  conectadoEm  DateTime?
-  criadoEm     DateTime              @default(now())
-  atualizadoEm DateTime              @updatedAt
+  id                String                @id @default(uuid())
+  empresaId         String
+  nomeInstancia     String                @unique
+  provedor          ProvedorWhatsApp      @default(MOCK)
+  status            StatusConexaoWhatsApp @default(DESCONECTADO)
+  /// cloud_api | coexistence
+  modoConexao       String?
+  wabaId            String?
+  phoneNumberId     String?
+  isTestConnection  Boolean               @default(false)
+  numero            String?
+  qrCode            String?
+  ultimoErro        String?
+  conectadoEm       DateTime?
+  criadoEm          DateTime              @default(now())
+  atualizadoEm      DateTime              @updatedAt
 
-  empresa   Empresa    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   conversas Conversa[]
 
   @@index([empresaId])
+  @@index([phoneNumberId])
   @@map("conexoes_whatsapp")
 }
 
@@ -481,7 +416,6 @@ model Conversa {
   criadoEm             DateTime        @default(now())
   atualizadoEm         DateTime        @updatedAt
 
-  empresa   Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   conexao   ConexaoWhatsApp? @relation(fields: [conexaoId], references: [id])
   contato   Contato?         @relation(fields: [contatoId], references: [id])
   mensagens Mensagem[]
@@ -508,7 +442,6 @@ model Mensagem {
   metadados      Json?
   criadoEm       DateTime        @default(now())
 
-  empresa  Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   conversa Conversa @relation(fields: [conversaId], references: [id], onDelete: Cascade)
 
   @@unique([conversaId, idExterno])
@@ -532,7 +465,6 @@ model Arquivo {
   enviadoPorId      String?
   criadoEm          DateTime @default(now())
 
-  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
   @@index([empresaId])
   @@index([empresaId, entidade, entidadeId])
@@ -558,7 +490,6 @@ model CampoPersonalizado {
   criadoEm      DateTime                   @default(now())
   atualizadoEm  DateTime                   @updatedAt
 
-  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
   @@unique([empresaId, entidade, chave])
   @@index([empresaId, entidade])
@@ -572,6 +503,8 @@ model Produto {
   nome            String
   descricao       String?
   unidade         String   @default("un")
+  /// NCM (8 dígitos) para emissão de NF-e.
+  ncm             String?
   precoVenda      Float    @default(0)
   estoqueAtual    Float    @default(0)
   estoqueMinimo   Float    @default(0)
@@ -580,7 +513,6 @@ model Produto {
   criadoEm        DateTime @default(now())
   atualizadoEm    DateTime @updatedAt
 
-  empresa        Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   itensOrcamento ItemOrcamento[]
   movimentacoes  MovimentacaoEstoque[]
 
@@ -611,9 +543,9 @@ model Orcamento {
   criadoEm       DateTime        @default(now())
   atualizadoEm   DateTime        @updatedAt
 
-  empresa      Empresa         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   oportunidade Oportunidade    @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
   itens        ItemOrcamento[]
+  notasFiscais NotaFiscal[]
 
   @@unique([empresaId, numero])
   @@index([empresaId])
@@ -655,11 +587,43 @@ model MovimentacaoEstoque {
   usuarioId      String?
   criadoEm       DateTime                @default(now())
 
-  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
 
   @@index([empresaId, criadoEm])
   @@index([produtoId, criadoEm])
   @@index([orcamentoId])
   @@map("movimentacoes_estoque")
+}
+
+model NotaFiscal {
+  id              String          @id @default(uuid())
+  empresaId       String
+  orcamentoId     String
+  oportunidadeId  String
+  status          StatusNotaFiscal @default(RASCUNHO)
+  chaveAcesso     String?
+  numero          String?
+  serie           String?
+  protocolo       String?
+  mensagemErro    String?
+  idExternoFocus  String?
+  refFocus        String?
+  arquivoXmlId    String?
+  arquivoPdfId    String?
+  payloadEnvio    Json?
+  respostaFocus   Json?
+  autorizadoEm    DateTime?
+  criadoPorId     String?
+  criadoEm        DateTime        @default(now())
+  atualizadoEm    DateTime        @updatedAt
+
+  orcamento    Orcamento    @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  oportunidade Oportunidade @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId])
+  @@index([orcamentoId])
+  @@index([oportunidadeId])
+  @@index([empresaId, status])
+  @@unique([empresaId, refFocus])
+  @@map("notas_fiscais")
 }

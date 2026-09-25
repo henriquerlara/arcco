@@ -93,7 +93,7 @@ const debugSeguro = computed(() => {
     <p class="text-xs leading-relaxed text-texto-secundario">
       Este fluxo usa o Embedded Signup com
       <code class="rounded bg-marfim px-1 py-0.5 text-[11px]">whatsapp_business_app_onboarding</code>
-      para números que já estão no WhatsApp Business App — sem misturar com a Evolution API.
+      para números que já estão no WhatsApp Business App.
     </p>
 
     <div

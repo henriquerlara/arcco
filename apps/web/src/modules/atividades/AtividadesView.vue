@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
+import { useRoute, useRouter, RouterLink } from 'vue-router';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import {
   Plus,
@@ -9,7 +10,6 @@ import {
   User,
   Target,
 } from 'lucide-vue-next';
-import { RouterLink } from 'vue-router';
 import CabecalhoPagina from '@/components/layout/CabecalhoPagina.vue';
 import EstadoVazio from '@/components/compartilhados/EstadoVazio.vue';
 import EstadoErro from '@/components/compartilhados/EstadoErro.vue';
@@ -27,10 +27,16 @@ import { formatarDataHora, estaAtrasada } from '@/composables/formatadores';
 import { useNotificacao } from '@/composables/useNotificacao';
 import { cn } from '@/composables/cn';
 
+const rota = useRoute();
+const router = useRouter();
 const queryClient = useQueryClient();
 const { notificarErro } = useNotificacao();
 
-const situacao = ref<'pendentes' | 'concluidas' | 'todas'>('pendentes');
+type SituacaoAgenda = 'pendentes' | 'atrasadas' | 'concluidas' | 'todas';
+
+const situacao = ref<SituacaoAgenda>(
+  rota.query.atrasadas === '1' || rota.query.atrasadas === 'true' ? 'atrasadas' : 'pendentes',
+);
 const tipo = ref('');
 const responsavelId = ref<string | null>(null);
 const formAberto = ref(false);
@@ -39,15 +45,35 @@ const atividadeEmEdicao = ref<Atividade | null>(null);
 const opcoesTipo = [{ valor: '', rotulo: 'Todos os tipos' }, ...opcoesDe(ROTULO_TIPO_ATIVIDADE)];
 const opcoesSituacao = [
   { valor: 'pendentes', rotulo: 'Pendentes' },
+  { valor: 'atrasadas', rotulo: 'Atrasadas' },
   { valor: 'concluidas', rotulo: 'Concluídas' },
   { valor: 'todas', rotulo: 'Todas' },
 ];
 
+watch(
+  () => rota.query.atrasadas,
+  (valor) => {
+    if (valor === '1' || valor === 'true') situacao.value = 'atrasadas';
+  },
+);
+
+watch(situacao, (valor) => {
+  const querAtrasadas = valor === 'atrasadas';
+  const naUrl = rota.query.atrasadas === '1' || rota.query.atrasadas === 'true';
+  if (querAtrasadas === naUrl) return;
+  void router.replace({
+    query: querAtrasadas ? { ...rota.query, atrasadas: '1' } : { ...rota.query, atrasadas: undefined },
+  });
+});
+
 const filtros = computed(() => ({
   tipo: tipo.value || undefined,
   responsavelId: responsavelId.value ?? undefined,
+  atrasadas: situacao.value === 'atrasadas' ? true : undefined,
   concluida:
-    situacao.value === 'todas' ? undefined : situacao.value === 'concluidas',
+    situacao.value === 'todas' || situacao.value === 'atrasadas'
+      ? undefined
+      : situacao.value === 'concluidas',
   porPagina: 50,
 }));
 
@@ -84,7 +110,7 @@ function contatoDaAtividade(ativ: Atividade) {
 
 <template>
   <div class="space-y-5">
-    <CabecalhoPagina titulo="Atividades" descricao="Tarefas, follow-ups e compromissos da equipe.">
+    <CabecalhoPagina titulo="Agenda" descricao="Tarefas, follow-ups e compromissos da equipe.">
       <template #acoes>
         <Button @click="novaAtividade"><Plus class="size-4" /> Nova atividade</Button>
       </template>
@@ -163,7 +189,7 @@ function contatoDaAtividade(ativ: Atividade) {
           v-if="ativ.oportunidadeId"
           :to="`/app/oportunidades/${ativ.oportunidadeId}`"
           class="shrink-0 rounded-md p-2 text-texto-secundario hover:bg-marfim hover:text-dourado-hover"
-          title="Ver oportunidade"
+          title="Ver negócio"
         >
           <Target class="size-4" />
         </RouterLink>

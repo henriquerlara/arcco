@@ -37,10 +37,3 @@ export function iniciarObservabilidade(): void {
     console.error('Falha ao iniciar OpenTelemetry:', erro);
   }
 }
-
-export async function encerrarObservabilidade(): Promise<void> {
-  if (sdk) {
-    await sdk.shutdown().catch(() => undefined);
-    sdk = null;
-  }
-}

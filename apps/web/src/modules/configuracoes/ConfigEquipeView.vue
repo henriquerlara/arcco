@@ -104,7 +104,7 @@ async function desativar(usuario: Usuario) {
 
 <template>
   <div class="space-y-5">
-    <CabecalhoPagina titulo="Configurações" descricao="Gerencie os dados e o funcionamento da sua conta.">
+    <CabecalhoPagina titulo="Equipe" descricao="Quem acessa a conta e o que cada pessoa pode fazer.">
       <template #acoes>
         <Button @click="abrirNovo"><Plus class="size-4" /> Convidar usuário</Button>
       </template>

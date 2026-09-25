@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   MessagesSquare,
   KanbanSquare,
+  CalendarClock,
   Users,
   Building2,
   Package,
@@ -14,12 +15,12 @@ import {
   PanelLeftOpen,
   LogOut,
 } from 'lucide-vue-next';
+import { PerfilUsuario, PERFIL_ROTULOS } from '@arcco/contratos';
 import MarcaArcco from '@/components/marca/MarcaArcco.vue';
 import { useInterfaceStore } from '@/stores/interface';
 import { useAutenticacaoStore } from '@/stores/autenticacao';
 import { useNotificacao } from '@/composables/useNotificacao';
 import { iniciais } from '@/composables/formatadores';
-import { PERFIL_ROTULOS } from '@arcco/contratos';
 import { cn } from '@/composables/cn';
 
 
@@ -31,16 +32,44 @@ const { notificarErro } = useNotificacao();
 
 const recolhida = computed(() => interfaceStore.sidebarRecolhida);
 
-const principais = [
-  { nome: 'dashboard', rotulo: 'Visão geral', icone: LayoutDashboard, to: '/app/dashboard' },
-  { nome: 'conversas', rotulo: 'Conversas', icone: MessagesSquare, to: '/app/conversas' },
-  { nome: 'pipeline', rotulo: 'Negócios', icone: KanbanSquare, to: '/app/pipeline' },
-  { nome: 'produtos', rotulo: 'Produtos', icone: Boxes, to: '/app/produtos' },
-  { nome: 'estoque', rotulo: 'Estoque', icone: Package, to: '/app/estoque' },
-  { nome: 'contatos', rotulo: 'Pessoas', icone: Users, to: '/app/contatos' },
-  { nome: 'obras', rotulo: 'Projetos', icone: Building2, to: '/app/obras' },
-  { nome: 'configuracoes', rotulo: 'Configurações', icone: Settings, to: '/app/configuracoes/empresa' },
-];
+const podeConfigurar = computed(() =>
+  auth.temPerfil(PerfilUsuario.PROPRIETARIO, PerfilUsuario.GESTOR),
+);
+const podeCatalogo = computed(() =>
+  auth.temPerfil(
+    PerfilUsuario.PROPRIETARIO,
+    PerfilUsuario.GESTOR,
+    PerfilUsuario.VENDEDOR,
+  ),
+);
+
+const principais = computed(() => {
+  const itens = [
+    { nome: 'dashboard', rotulo: 'Visão geral', icone: LayoutDashboard, to: '/app/dashboard' },
+    { nome: 'conversas', rotulo: 'Conversas', icone: MessagesSquare, to: '/app/conversas' },
+    { nome: 'pipeline', rotulo: 'Negócios', icone: KanbanSquare, to: '/app/pipeline' },
+    { nome: 'agenda', rotulo: 'Agenda', icone: CalendarClock, to: '/app/agenda' },
+  ];
+  if (podeCatalogo.value) {
+    itens.push(
+      { nome: 'produtos', rotulo: 'Produtos', icone: Boxes, to: '/app/produtos' },
+      { nome: 'estoque', rotulo: 'Estoque', icone: Package, to: '/app/estoque' },
+    );
+  }
+  itens.push(
+    { nome: 'contatos', rotulo: 'Pessoas', icone: Users, to: '/app/contatos' },
+    { nome: 'obras', rotulo: 'Projetos', icone: Building2, to: '/app/obras' },
+  );
+  if (podeConfigurar.value) {
+    itens.push({
+      nome: 'configuracoes',
+      rotulo: 'Configurações',
+      icone: Settings,
+      to: '/app/configuracoes/empresa',
+    });
+  }
+  return itens;
+});
 
 function ativo(to: string): boolean {
   return rota.path === to || rota.path.startsWith(to + '/');

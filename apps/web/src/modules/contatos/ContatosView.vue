@@ -46,7 +46,8 @@ const colunas: ColunaTabela[] = [
   { chave: 'tipo', rotulo: 'Tipo' },
   { chave: 'telefone', rotulo: 'Telefone' },
   { chave: 'empresaNome', rotulo: 'Empresa' },
-  { chave: 'oportunidades', rotulo: 'Oport.', alinhamento: 'centro' },
+  { chave: 'oportunidades', rotulo: 'Negócios', alinhamento: 'centro' },
+  { chave: 'obras', rotulo: 'Projetos', alinhamento: 'centro' },
 ];
 
 const linhas = computed(() => data.value?.dados ?? []);
@@ -58,11 +59,11 @@ function abrirDetalhe(contato: Contato) {
 
 <template>
   <div class="space-y-5">
-    <CabecalhoPagina titulo="Contatos" descricao="Pessoas e empresas do seu relacionamento comercial.">
+    <CabecalhoPagina titulo="Pessoas" descricao="Pessoas e empresas do seu relacionamento comercial.">
       <template #acoes>
         <Button @click="formAberto = true">
           <Plus class="size-4" />
-          Novo contato
+          Nova pessoa
         </Button>
       </template>
     </CabecalhoPagina>
@@ -79,14 +80,14 @@ function abrirDetalhe(contato: Contato) {
 
     <EstadoVazio
       v-else-if="!isLoading && linhas.length === 0"
-      titulo="Nenhum contato encontrado"
-      descricao="Cadastre seu primeiro contato ou ajuste a busca."
+      titulo="Nenhuma pessoa encontrada"
+      descricao="Cadastre a primeira pessoa ou ajuste a busca."
       :icone="Users"
     >
       <template #acao>
         <Button @click="formAberto = true">
           <Plus class="size-4" />
-          Novo contato
+          Nova pessoa
         </Button>
       </template>
     </EstadoVazio>
@@ -123,6 +124,9 @@ function abrirDetalhe(contato: Contato) {
       </template>
       <template #celula-oportunidades="{ linha }">
         <span class="font-medium">{{ (linha as Contato).totalOportunidades ?? 0 }}</span>
+      </template>
+      <template #celula-obras="{ linha }">
+        <span class="font-medium">{{ (linha as Contato).totalObras ?? 0 }}</span>
       </template>
 
       <template #rodape>

@@ -11,13 +11,19 @@ import type {
   StatusConversa,
   StatusMensagem,
   StatusObra,
+  StatusOrcamento,
+  StatusNotaFiscal,
   TipoAtividade,
   TipoCampoPersonalizado,
   TipoContato,
   TipoEtapaFunil,
   TipoMensagem,
+  TipoMovimentacaoEstoque,
   IntencaoChatbot,
+  EnderecoFiscal,
 } from '@arcco/contratos';
+
+export type { StatusOrcamento, StatusNotaFiscal, TipoMovimentacaoEstoque };
 
 export interface Usuario {
   id: string;
@@ -43,6 +49,9 @@ export interface Empresa {
   cidade?: string | null;
   estado?: string | null;
   logoArquivoId?: string | null;
+  cnpj?: string | null;
+  inscricaoEstadual?: string | null;
+  enderecoFiscal?: EnderecoFiscal | null;
   onboardingConcluido?: boolean;
   configuracoes?: ConfiguracoesEmpresa;
 }
@@ -53,6 +62,7 @@ export interface Produto {
   nome: string;
   descricao?: string | null;
   unidade: string;
+  ncm?: string | null;
   precoVenda: number;
   estoqueAtual: number;
   estoqueMinimo: number;
@@ -61,8 +71,6 @@ export interface Produto {
   critico?: boolean;
   zerado?: boolean;
 }
-
-export type TipoMovimentacaoEstoque = 'ENTRADA' | 'BAIXA' | 'AJUSTE';
 
 export interface MovimentacaoEstoque {
   id: string;
@@ -83,7 +91,26 @@ export interface ResumoEstoque {
   zerados: number;
 }
 
-export type StatusOrcamento = 'RASCUNHO' | 'ENVIADO' | 'ACEITO' | 'CANCELADO' | 'CONVERTIDO';
+export interface NotaFiscal {
+  id: string;
+  empresaId: string;
+  orcamentoId: string;
+  oportunidadeId: string;
+  status: StatusNotaFiscal;
+  chaveAcesso?: string | null;
+  numero?: string | null;
+  serie?: string | null;
+  protocolo?: string | null;
+  mensagemErro?: string | null;
+  respostaFocus?: { _mock?: boolean } | null;
+  idExternoFocus?: string | null;
+  refFocus?: string | null;
+  arquivoXmlId?: string | null;
+  arquivoPdfId?: string | null;
+  autorizadoEm?: string | null;
+  criadoEm: string;
+  atualizadoEm?: string;
+}
 
 export interface ItemOrcamento {
   id: string;
@@ -138,6 +165,7 @@ export interface Contato {
   email?: string | null;
   tipo: TipoContato;
   empresaNome?: string | null;
+  documento?: string | null;
   origem?: string | null;
   observacoes?: string | null;
   responsavelId?: string | null;
@@ -145,6 +173,18 @@ export interface Contato {
   dadosPersonalizados?: Record<string, unknown>;
   totalOportunidades?: number;
   totalObras?: number;
+  oportunidades?: Array<{
+    id: string;
+    codigo: string;
+    titulo: string;
+    etapaId: string;
+    valorEstimado?: number | string | null;
+  }>;
+  obras?: Array<{
+    id: string;
+    papel: string;
+    obra: Obra;
+  }>;
   criadoEm?: string;
   atualizadoEm?: string;
 }
@@ -297,6 +337,7 @@ export interface Conversa {
   nomeExibicao?: string | null;
   status: StatusConversa;
   modo: ModoAtendimento;
+  intencaoAtual?: string | null;
   ultimaMensagem?: string | null;
   ultimaMensagemEm?: string | null;
   naoLidas?: number;
@@ -307,6 +348,13 @@ export interface Conversa {
   oportunidade?: Oportunidade | null;
   estadoBot?: { resumo?: string; dadosColetados?: Record<string, unknown> } | null;
   ultimaMensagemPreview?: string | null;
+  conexao?: {
+    id: string;
+    provedor: string;
+    modoConexao?: string | null;
+    numero?: string | null;
+    isTestConnection?: boolean;
+  } | null;
   criadoEm?: string;
 }
 
@@ -318,7 +366,10 @@ export interface Mensagem {
   conteudo: string;
   status: StatusMensagem;
   arquivoId?: string | null;
+  remetente?: string | null;
+  autorUsuarioId?: string | null;
   autorNome?: string | null;
+  /** @deprecated Preferir remetente === 'bot' */
   deBot?: boolean;
   criadoEm: string;
 }

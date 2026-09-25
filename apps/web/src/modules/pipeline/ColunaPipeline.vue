@@ -20,16 +20,23 @@ const total = computed(() =>
 
 const ehEtapaOrcamento = computed(() => props.etapa.chaveSistema === 'QUALIFICACAO');
 
+const ehForaDoFunil = computed(
+  () => props.etapa.id === '__fora_do_funil__' || props.etapa.ativo === false,
+);
+
 const corTopo = computed(() => {
+  if (ehForaDoFunil.value) return 'bg-texto-secundario';
   if (props.etapa.tipo === 'GANHA') return 'bg-sucesso';
   if (props.etapa.tipo === 'PERDIDA') return 'bg-erro';
   return 'bg-dourado';
 });
-
 </script>
 
 <template>
-  <div class="flex min-w-0 flex-1 basis-0 flex-col overflow-hidden rounded-md border border-borda/80 bg-marfim/45">
+  <div
+    class="flex min-w-0 flex-1 basis-0 flex-col overflow-hidden rounded-md border bg-marfim/45"
+    :class="ehForaDoFunil ? 'border-borda border-dashed' : 'border-borda/80'"
+  >
     <header class="flex items-center justify-between gap-2 border-b border-borda/70 bg-branco/70 px-3 py-3.5 backdrop-blur-sm sm:px-4">
       <div class="flex min-w-0 items-center gap-2">
         <span class="h-4 w-1 shrink-0" :class="corTopo" />
@@ -46,6 +53,9 @@ const corTopo = computed(() => {
       {{ formatarMoeda(total) }}
       <span v-if="ehEtapaOrcamento" class="mt-0.5 block text-[11px] text-dourado-hover">
         Envie o orçamento pelo cartão para avançar
+      </span>
+      <span v-else-if="ehForaDoFunil" class="mt-0.5 block text-[11px] text-texto-secundario">
+        Etapa desativada — abra o card e mova para uma etapa ativa
       </span>
     </p>
 

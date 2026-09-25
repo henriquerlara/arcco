@@ -130,7 +130,7 @@ async function salvar() {
         <Textarea v-model="form.descricao" />
       </div>
       <div v-if="semRelacaoFixa" class="space-y-1.5">
-        <Label>Contato relacionado</Label>
+        <Label>Pessoa relacionada</Label>
         <SeletorContato v-model="form.contatoId" />
       </div>
       <div class="space-y-1.5">
