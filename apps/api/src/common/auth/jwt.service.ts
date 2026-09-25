@@ -100,13 +100,7 @@ export class JwtService {
       this.gerarRefreshToken(payload),
     ]);
 
-    const seguro = ehProducao();
-    const base = {
-      httpOnly: true,
-      sameSite: 'lax' as const,
-      secure: seguro,
-      path: '/',
-    };
+    const base = opcoesCookie();
 
     resposta.setCookie(COOKIE_ACCESS, access, {
       ...base,
@@ -119,7 +113,20 @@ export class JwtService {
   }
 
   limparCookies(resposta: FastifyReply): void {
-    resposta.clearCookie(COOKIE_ACCESS, { path: '/' });
-    resposta.clearCookie(COOKIE_REFRESH, { path: '/' });
+    const base = opcoesCookie();
+    resposta.clearCookie(COOKIE_ACCESS, base);
+    resposta.clearCookie(COOKIE_REFRESH, base);
   }
+}
+
+/** Painel e API no Render ficam em hosts diferentes de onrender.com.
+ *  O navegador trata isso como sites distintos e descarta cookie Lax. */
+function opcoesCookie() {
+  const producao = ehProducao();
+  return {
+    httpOnly: true,
+    secure: producao,
+    sameSite: (producao ? 'none' : 'lax') as 'none' | 'lax',
+    path: '/',
+  };
 }
