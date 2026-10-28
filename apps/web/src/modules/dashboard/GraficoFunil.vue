@@ -12,11 +12,14 @@ import { formatarMoeda } from '@/composables/formatadores';
 use([BarChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
 const props = defineProps<{ dados: PontoFunil[] }>();
+const emit = defineEmits<{ selecionar: [ponto: PontoFunil] }>();
 
 const cores: Record<string, string> = {
   GANHA: '#39785e',
   PERDIDA: '#a84945',
   ABERTA: '#0d4a51',
+  PEDIDO: '#1d4ed8',
+  NEGOCIO: '#0d4a51',
 };
 
 const opcao = computed<EChartsOption>(() => {
@@ -34,9 +37,10 @@ const opcao = computed<EChartsOption>(() => {
         const item = arr[0];
         if (!item) return '';
         const ponto = props.dados[item.dataIndex];
-        return `<strong>${item.name}</strong><br/>${item.value} negócio(s)<br/>${formatarMoeda(
-          ponto?.valor ?? 0,
-        )}`;
+        const tipo = ponto?.tipoCard === 'PEDIDO' ? 'pedido(s)' : 'negócio(s)';
+        const valor =
+          ponto?.valor != null ? `<br/>${formatarMoeda(ponto.valor)}` : '';
+        return `<strong>${item.name}</strong><br/>${item.value} ${tipo}${valor}`;
       },
     },
     xAxis: {
@@ -59,7 +63,10 @@ const opcao = computed<EChartsOption>(() => {
       {
         type: 'bar',
         data: props.dados.map((p) => {
-          const tom = cores[p.tipo ?? 'ABERTA'] ?? '#0d4a51';
+          const tom =
+            cores[p.tipoCard ?? ''] ??
+            cores[p.tipo ?? 'ABERTA'] ??
+            '#0d4a51';
           return {
             value: p.total,
             itemStyle: {
@@ -74,19 +81,19 @@ const opcao = computed<EChartsOption>(() => {
     ],
   };
 });
+
+function aoClique(params: { dataIndex?: number }) {
+  if (params.dataIndex == null) return;
+  const ponto = props.dados[params.dataIndex];
+  if (ponto) emit('selecionar', ponto);
+}
 </script>
 
 <template>
   <VChart
-    v-if="dados.length"
+    class="h-72 w-full"
     :option="opcao"
     autoresize
-    class="h-72 w-full"
+    @click="aoClique"
   />
-  <div
-    v-else
-    class="flex h-72 items-center justify-center text-sm text-texto-secundario"
-  >
-    Sem negócios no funil.
-  </div>
 </template>

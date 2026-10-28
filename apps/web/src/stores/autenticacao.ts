@@ -7,6 +7,7 @@ import { servicoAutenticacao } from '@/services';
 export const useAutenticacaoStore = defineStore('autenticacao', () => {
   const usuario = ref<Usuario | null>(null);
   const empresa = ref<Empresa | null>(null);
+  const permissoesComerciais = ref<string[] | null>(null);
   const carregandoSessao = ref(true);
   const sessaoResolvida = ref(false);
 
@@ -24,15 +25,24 @@ export const useAutenticacaoStore = defineStore('autenticacao', () => {
   function definirSessao(sessao: Sessao) {
     usuario.value = sessao.usuario;
     empresa.value = sessao.empresa;
+    permissoesComerciais.value =
+      sessao.permissoesComerciais === undefined ? null : sessao.permissoesComerciais;
   }
 
   function limpar() {
     usuario.value = null;
     empresa.value = null;
+    permissoesComerciais.value = null;
   }
 
   function temPerfil(...perfis: PerfilUsuario[]): boolean {
     return usuario.value ? perfis.includes(usuario.value.perfil) : false;
+  }
+
+  /** null = modo legado (sem restrição comercial). */
+  function temPermissaoComercial(chave: string): boolean {
+    if (permissoesComerciais.value === null) return true;
+    return permissoesComerciais.value.includes(chave);
   }
 
   async function carregarSessao(): Promise<boolean> {
@@ -95,6 +105,7 @@ export const useAutenticacaoStore = defineStore('autenticacao', () => {
   return {
     usuario,
     empresa,
+    permissoesComerciais,
     carregandoSessao,
     sessaoResolvida,
     autenticado,
@@ -103,6 +114,7 @@ export const useAutenticacaoStore = defineStore('autenticacao', () => {
     definirSessao,
     limpar,
     temPerfil,
+    temPermissaoComercial,
     carregarSessao,
     entrar,
     cadastrar,

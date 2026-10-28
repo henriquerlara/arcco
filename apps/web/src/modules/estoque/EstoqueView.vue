@@ -27,12 +27,17 @@ import { servicoProdutos } from '@/services';
 import { useNotificacao } from '@/composables/useNotificacao';
 import { formatarNumero } from '@/composables/formatadores';
 import { useAutenticacaoStore } from '@/stores/autenticacao';
-import { PerfilUsuario } from '@arcco/contratos';
+import { PerfilUsuario, PersonalizacaoComercial } from '@arcco/contratos';
+import EstoqueEcolumePainel from './EstoqueEcolumePainel.vue';
 
 const queryClient = useQueryClient();
 const auth = useAutenticacaoStore();
 const { notificarErro, sucesso } = useNotificacao();
 const rota = useRoute();
+
+const ecolume = computed(
+  () => auth.empresa?.personalizacaoComercial === PersonalizacaoComercial.ECOLUME,
+);
 
 const podeEditar = computed(() =>
   auth.temPerfil(PerfilUsuario.PROPRIETARIO, PerfilUsuario.GESTOR, PerfilUsuario.VENDEDOR),
@@ -113,11 +118,10 @@ async function confirmarAjuste() {
   if (!alvo.value || !obsAjuste.value.trim()) return;
   salvando.value = true;
   try {
-    await servicoProdutos.ajuste(
-      alvo.value.id,
-      Number(saldoContado.value),
-      obsAjuste.value.trim(),
-    );
+    await servicoProdutos.ajuste(alvo.value.id, {
+      saldoContado: Number(saldoContado.value),
+      observacao: obsAjuste.value.trim(),
+    });
     sucesso('Ajuste de inventário registrado.');
     modalAjuste.value = false;
     await queryClient.invalidateQueries({ queryKey: ['estoque'] });
@@ -130,7 +134,8 @@ async function confirmarAjuste() {
 </script>
 
 <template>
-  <div class="space-y-5">
+  <EstoqueEcolumePainel v-if="ecolume" />
+  <div v-else class="space-y-5">
     <CabecalhoPagina
       titulo="Estoque"
       descricao="Saldo, entradas, inventário e histórico. O saldo só muda por movimentação."
@@ -313,3 +318,4 @@ async function confirmarAjuste() {
     </Dialog>
   </div>
 </template>
+

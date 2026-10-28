@@ -17,6 +17,11 @@ enum PerfilUsuario {
   ATENDENTE
 }
 
+enum RamoProduto {
+  CONSTRUCAO
+  SAUDE
+}
+
 enum SegmentoEmpresa {
   ILUMINACAO
   PISOS_REVESTIMENTOS
@@ -31,6 +36,7 @@ model Empresa {
   id                String          @id @default(uuid())
   nome              String
   nomeFantasia      String?
+  ramo              RamoProduto     @default(CONSTRUCAO)
   segmento          SegmentoEmpresa @default(OUTRO)
   telefone          String?
   cidade            String?
@@ -47,7 +53,9 @@ model Empresa {
   criadoEm          DateTime        @default(now())
   atualizadoEm      DateTime        @updatedAt
 
-  usuarios Usuario[]
+  usuarios   Usuario[]
+  concessoes ConcessaoPermissao[]
+  conjuntos  ConjuntoPermissao[]
 
   @@map("empresas")
 }
@@ -66,8 +74,61 @@ model Usuario {
   criadoEm        DateTime      @default(now())
   atualizadoEm    DateTime      @updatedAt
 
-  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa    Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  concessoes ConcessaoPermissao[]
 
   @@index([empresaId])
   @@map("usuarios")
+}
+
+/// Perfil reutilizável de permissões (template). Aplicar copia chaves ao usuário; não sincroniza depois.
+model ConjuntoPermissao {
+  id           String   @id @default(uuid())
+  empresaId    String
+  nome         String
+  chaves       String[]
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@unique([empresaId, nome])
+  @@index([empresaId])
+  @@map("conjuntos_permissao")
+}
+
+/// Chave concedida a um usuário. conjuntoId = último template aplicado (metadado; não sincroniza).
+model ConcessaoPermissao {
+  id         String   @id @default(uuid())
+  empresaId  String
+  usuarioId  String
+  chave      String
+  conjuntoId String?
+  criadoEm   DateTime @default(now())
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, chave])
+  @@index([empresaId, usuarioId])
+  @@map("concessoes_permissao")
+}
+
+/// Trilha de permissão. Fica neste banco para entrar na mesma transação da concessão.
+/// Sem chave estrangeira: apagar a empresa não apaga o histórico por cascata.
+model LogAuditoria {
+  id         String   @id @default(uuid())
+  empresaId  String
+  usuarioId  String?
+  tipo       String
+  entidade   String
+  entidadeId String
+  anterior   Json?
+  posterior  Json?
+  criadoEm   DateTime @default(now())
+
+  @@index([empresaId, criadoEm])
+  @@index([empresaId, usuarioId])
+  @@index([empresaId, tipo, criadoEm])
+  @@map("logs_auditoria")
 }

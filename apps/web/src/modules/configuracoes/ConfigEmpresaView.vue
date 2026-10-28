@@ -202,7 +202,7 @@ async function salvar() {
           </div>
           <div class="space-y-1.5">
             <Label>Inscrição estadual</Label>
-            <Input v-model="form.inscricaoEstadual" />
+            <Input v-model="form.inscricaoEstadual" mascara="ie" placeholder="Número da IE" />
           </div>
           <div class="space-y-1.5 sm:col-span-2">
             <Label>Logradouro</Label>

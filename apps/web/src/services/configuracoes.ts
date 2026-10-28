@@ -24,6 +24,8 @@ function extrairConfiguracoes(empresa: Empresa): ConfiguracoesEmpresa {
     chatbot: { ...padrao.chatbot, ...atual.chatbot },
     onboardingConcluido: atual.onboardingConcluido ?? padrao.onboardingConcluido,
     diasFollowUpOrcamento: atual.diasFollowUpOrcamento ?? padrao.diasFollowUpOrcamento,
+    personalizacaoComercial:
+      atual.personalizacaoComercial ?? padrao.personalizacaoComercial,
   };
 }
 
@@ -45,6 +47,144 @@ export const servicoEmpresa = {
   },
   async concluirOnboarding(): Promise<void> {
     await http.patch('/empresa/onboarding', { onboardingConcluido: true });
+  },
+  async parametrosComerciais(): Promise<ParametrosComerciaisResposta> {
+    return desembrulhar<ParametrosComerciaisResposta>(
+      await http.get('/empresa/parametros-comerciais'),
+    );
+  },
+  async atualizarParametrosComerciais(
+    dados: AtualizarParametrosComerciaisDto,
+  ): Promise<ParametrosComerciaisResposta> {
+    return desembrulhar<ParametrosComerciaisResposta>(
+      await http.patch('/empresa/parametros-comerciais', dados),
+    );
+  },
+};
+
+/** ECOL-02 — GET/PATCH /empresa/parametros-comerciais */
+export type ParametrosComerciaisResposta = {
+  diasOrcamentoSemMovimentacao: number;
+  diasChecklistPendente: number;
+  rtPadraoParceiro: number;
+  baseRtComissao: 'TOTAL_PEDIDO';
+  margemPadraoGlobal: number | null;
+  validadeOrcamentoDias: number | null;
+  descontoMaximoPercentual: number | null;
+  modelosPagamentoHabilitados: string[];
+  motivosPerda: Array<{ codigo: string; rotulo: string; exigeDescricao: boolean }>;
+  fiscal: {
+    regimeTributario: string | null;
+    cfopPadrao: string | null;
+    csosnPadrao: string | null;
+    cstPadrao: string | null;
+    naturezaOperacao: string | null;
+    tratamentoSt: string | null;
+    informacoesComplementaresNfe: string | null;
+  };
+  sugestoesP6?: { margemPadraoGlobal: number; validadeOrcamentoDias: number };
+  certificado?: {
+    tokenFocusConfigurado: boolean;
+    armazenamentoSegredo: string;
+    pendenciaP3: string;
+  };
+  empresa?: {
+    id: string;
+    nome: string;
+    nomeFantasia: string | null;
+    cnpj: string | null;
+    inscricaoEstadual: string | null;
+    enderecoFiscal: unknown;
+  };
+};
+
+export type AtualizarParametrosComerciaisDto = {
+  diasOrcamentoSemMovimentacao?: number;
+  diasChecklistPendente?: number;
+  rtPadraoParceiro?: number;
+  baseRtComissao?: 'TOTAL_PEDIDO';
+  margemPadraoGlobal?: number | null;
+  validadeOrcamentoDias?: number | null;
+  descontoMaximoPercentual?: number | null;
+  modelosPagamentoHabilitados?: string[];
+  motivosPerda?: Array<{ codigo: string; rotulo: string; exigeDescricao: boolean }>;
+  regimeTributario?: string | null;
+  naturezaOperacao?: string | null;
+  cfopPadrao?: string | null;
+  csosnPadrao?: string | null;
+  cstPadrao?: string | null;
+  tratamentoSt?: string | null;
+  informacoesComplementaresNfe?: string | null;
+};
+
+export type CatalogoPermissoes = {
+  chaves: string[];
+  grupos: Array<{ id: string; rotulo: string; chaves: string[] }>;
+};
+
+export type PermissoesUsuarioResposta = {
+  usuario: Usuario;
+  concedidas: string[];
+  efetivas: string[] | null;
+  administrador: boolean;
+  escopoAgenda: string;
+  veTodosNegocios: boolean;
+  ultimoConjuntoId: string | null;
+};
+
+export type ConjuntoPermissao = {
+  id: string;
+  empresaId: string;
+  nome: string;
+  chaves: string[];
+};
+
+export type RegistroAuditoriaLista = {
+  id: string;
+  origem: 'OPERACIONAL' | 'PLATAFORMA';
+  empresaId: string;
+  usuarioId: string | null;
+  usuarioNome: string | null;
+  tipo: string;
+  entidade: string;
+  entidadeId: string;
+  criadoEm: string;
+};
+
+export type RegistroAuditoriaDetalhe = RegistroAuditoriaLista & {
+  anterior: unknown;
+  posterior: unknown;
+};
+
+export type ListaAuditoria = {
+  dados: RegistroAuditoriaLista[];
+  paginacao: {
+    pagina: number;
+    porPagina: number;
+    total: number;
+    totalPaginas: number;
+  };
+};
+
+export const servicoAuditoria = {
+  listar(filtros: {
+    pagina?: number;
+    porPagina?: number;
+    usuarioId?: string;
+    tipo?: string;
+    de?: string;
+    ate?: string;
+  }): Promise<ListaAuditoria> {
+    // Resposta já é `{ dados, paginacao }` — não desembrulhar.
+    return http.get<ListaAuditoria>('/auditoria', { ...filtros });
+  },
+  async obter(
+    id: string,
+    opts?: { origem?: 'OPERACIONAL' | 'PLATAFORMA' },
+  ): Promise<RegistroAuditoriaDetalhe> {
+    return desembrulhar<RegistroAuditoriaDetalhe>(
+      await http.get(`/auditoria/${id}`, opts?.origem ? { origem: opts.origem } : undefined),
+    );
   },
 };
 
@@ -68,6 +208,34 @@ export const servicoEquipe = {
   },
   desativar(id: string): Promise<void> {
     return http.delete(`/usuarios/${id}`);
+  },
+  async catalogoPermissoes(): Promise<CatalogoPermissoes> {
+    return desembrulhar<CatalogoPermissoes>(await http.get('/permissoes/catalogo'));
+  },
+  async permissoesUsuario(id: string): Promise<PermissoesUsuarioResposta> {
+    return desembrulhar<PermissoesUsuarioResposta>(await http.get(`/permissoes/usuarios/${id}`));
+  },
+  async definirPermissoes(
+    id: string,
+    chaves: string[],
+    conjuntoId?: string | null,
+  ): Promise<PermissoesUsuarioResposta> {
+    return desembrulhar<PermissoesUsuarioResposta>(
+      await http.put(`/permissoes/usuarios/${id}`, { chaves, conjuntoId }),
+    );
+  },
+  async listarConjuntos(): Promise<ConjuntoPermissao[]> {
+    return desembrulhar<ConjuntoPermissao[]>(await http.get('/permissoes/conjuntos'));
+  },
+  async criarConjunto(nome: string, chaves: string[]): Promise<ConjuntoPermissao> {
+    return desembrulhar<ConjuntoPermissao>(
+      await http.post('/permissoes/conjuntos', { nome, chaves }),
+    );
+  },
+  async aplicarConjunto(conjuntoId: string, usuarioId: string): Promise<PermissoesUsuarioResposta> {
+    return desembrulhar<PermissoesUsuarioResposta>(
+      await http.post(`/permissoes/conjuntos/${conjuntoId}/aplicar`, { usuarioId }),
+    );
   },
 };
 

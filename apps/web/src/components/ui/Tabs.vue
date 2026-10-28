@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from 'radix-vue';
-import { computed } from 'vue';
 
 export interface AbaItem {
   valor: string;
@@ -14,14 +13,17 @@ const props = defineProps<{
 
 const emit = defineEmits<{ (e: 'update:modelValue', valor: string): void }>();
 
-const ativo = computed({
-  get: () => props.modelValue,
-  set: (v) => emit('update:modelValue', v),
-});
+function aoMudar(valor: string | number) {
+  emit('update:modelValue', String(valor));
+}
 </script>
 
 <template>
-  <TabsRoot v-model="ativo" class="flex flex-col gap-4">
+  <TabsRoot
+    :model-value="props.modelValue"
+    class="flex flex-col gap-4"
+    @update:model-value="aoMudar"
+  >
     <TabsList
       class="inline-flex w-fit items-center gap-0 border-b border-borda"
     >

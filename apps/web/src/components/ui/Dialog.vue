@@ -17,7 +17,7 @@ const props = withDefaults(
     modelValue: boolean;
     titulo?: string;
     descricao?: string;
-    tamanho?: 'sm' | 'md' | 'lg' | 'xl';
+    tamanho?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
     class?: string;
   }>(),
   { tamanho: 'md' },
@@ -35,6 +35,7 @@ const larguras = {
   md: 'max-w-lg',
   lg: 'max-w-2xl',
   xl: 'max-w-4xl',
+  '2xl': 'max-w-5xl',
 } as const;
 </script>
 
@@ -47,13 +48,16 @@ const larguras = {
       <DialogContent
         :class="
           cn(
-            'fixed left-1/2 top-1/2 z-50 grid w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-borda bg-branco p-6 shadow-flutuante focus:outline-none data-[state=open]:animate-fade-in',
+            'fixed left-1/2 top-1/2 z-50 flex w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-hidden rounded-lg border border-borda bg-branco p-6 shadow-flutuante focus:outline-none data-[state=open]:animate-fade-in',
             larguras[tamanho],
             props.class,
           )
         "
       >
-        <div v-if="titulo || descricao || $slots.cabecalho" class="flex flex-col gap-1 pr-6">
+        <div
+          v-if="titulo || descricao || $slots.cabecalho"
+          class="flex shrink-0 flex-col gap-1 pr-6"
+        >
           <slot name="cabecalho">
             <DialogTitle v-if="titulo" class="text-lg font-semibold text-texto">
               {{ titulo }}
@@ -64,9 +68,11 @@ const larguras = {
           </slot>
         </div>
 
-        <slot />
+        <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <slot />
+        </div>
 
-        <div v-if="$slots.rodape" class="flex justify-end gap-2 pt-2">
+        <div v-if="$slots.rodape" class="flex shrink-0 justify-end gap-2 pt-2">
           <slot name="rodape" />
         </div>
 

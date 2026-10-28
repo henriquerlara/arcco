@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   StatusNotaFiscal,
   StatusOrcamento,
+  TipoAuditoria,
   TipoEtapaFunil,
   type EnderecoFiscal,
 } from '@arcco/contratos';
@@ -12,6 +13,7 @@ import { ArquivosService } from '../arquivos/arquivos.service';
 import { EmpresasService } from '../empresas/empresas.service';
 import { OrcamentosService } from '../orcamentos/orcamentos.service';
 import { FocusNfeClient } from './focus-nfe.client';
+import { AuditoriaService } from '../auditoria/auditoria.service';
 
 @Injectable()
 export class NotasFiscaisService {
@@ -23,6 +25,7 @@ export class NotasFiscaisService {
     private readonly arquivos: ArquivosService,
     private readonly empresas: EmpresasService,
     private readonly orcamentos: OrcamentosService,
+    private readonly auditoria: AuditoriaService,
   ) {}
 
   statusIntegracao() {
@@ -30,6 +33,14 @@ export class NotasFiscaisService {
       configurado: this.focus.configurado(),
       ambiente: this.focus.ambiente(),
       modo: this.focus.configurado() ? 'focus' : 'mock',
+      certificado: {
+        provedorFocus: true,
+        armazenamentoLocal: false,
+        mensagem:
+          'Certificado A1 gerenciado no painel Focus NFe; o ARCCO nao armazena certificado nem senha.',
+      },
+      cartaCorrecaoDisponivel: true,
+      emailDanfeDisponivel: true,
       mensagem: this.focus.configurado()
         ? 'Token Focus NFe configurado'
         : 'Sem FOCUS_NFE_TOKEN — emissões usam mock local',
@@ -197,7 +208,7 @@ export class NotasFiscaisService {
 
     try {
       const envio = await this.focus.emitirNfe(ref, payload);
-      return this.aplicarRespostaFocus(nf.id, empresaId, envio.body, envio.mock);
+      return this.aplicarRespostaFocus(nf.id, empresaId, envio.body, envio.mock, usuarioId);
     } catch (erro) {
       const msg = (erro as Error).message;
       this.logger.error(`Falha emissão ref=${ref}: ${msg}`);
@@ -211,13 +222,13 @@ export class NotasFiscaisService {
     }
   }
 
-  async sincronizar(empresaId: string, id: string) {
+  async sincronizar(empresaId: string, id: string, usuarioId?: string | null) {
     const nf = await this.obter(empresaId, id);
     if (!nf.refFocus) {
       throw Erros.invalido('NF_SEM_REF', 'Nota sem referência Focus');
     }
     const consulta = await this.focus.consultarNfe(nf.refFocus);
-    return this.aplicarRespostaFocus(nf.id, empresaId, consulta.body, consulta.mock);
+    return this.aplicarRespostaFocus(nf.id, empresaId, consulta.body, consulta.mock, usuarioId);
   }
 
   /** Webhook / atualização externa Focus (status por ref). */
@@ -235,6 +246,7 @@ export class NotasFiscaisService {
     empresaId: string,
     body: Record<string, unknown>,
     mock: boolean,
+    usuarioId?: string | null,
   ) {
     const statusRaw = String(body.status ?? '').toLowerCase();
     let status: StatusNotaFiscal = StatusNotaFiscal.PROCESSANDO;
@@ -292,21 +304,47 @@ export class NotasFiscaisService {
       }
     }
 
-    return this.prisma.notaFiscal.update({
-      where: { id },
-      data: {
-        status,
-        chaveAcesso: body.chave_nfe ? String(body.chave_nfe) : undefined,
-        numero: body.numero != null ? String(body.numero) : undefined,
-        serie: body.serie != null ? String(body.serie) : undefined,
-        protocolo: body.protocolo ? String(body.protocolo) : undefined,
-        mensagemErro,
-        idExternoFocus: body.id ? String(body.id) : undefined,
-        respostaFocus: mock ? ({ ...body, _mock: true } as object) : (body as object),
-        autorizadoEm: status === StatusNotaFiscal.AUTORIZADA ? new Date() : null,
-        ...(arquivoXmlId ? { arquivoXmlId } : {}),
-        ...(arquivoPdfId ? { arquivoPdfId } : {}),
-      },
+    const anterior = await this.prisma.notaFiscal.findFirst({
+      where: { id, empresaId },
+      select: { status: true },
+    });
+
+    return this.prisma.$transaction(async (tx) => {
+      const nota = await tx.notaFiscal.update({
+        where: { id },
+        data: {
+          status,
+          chaveAcesso: body.chave_nfe ? String(body.chave_nfe) : undefined,
+          numero: body.numero != null ? String(body.numero) : undefined,
+          serie: body.serie != null ? String(body.serie) : undefined,
+          protocolo: body.protocolo ? String(body.protocolo) : undefined,
+          mensagemErro,
+          idExternoFocus: body.id ? String(body.id) : undefined,
+          respostaFocus: mock ? ({ ...body, _mock: true } as object) : (body as object),
+          autorizadoEm: status === StatusNotaFiscal.AUTORIZADA ? new Date() : null,
+          ...(arquivoXmlId ? { arquivoXmlId } : {}),
+          ...(arquivoPdfId ? { arquivoPdfId } : {}),
+        },
+      });
+
+      const fato =
+        status === StatusNotaFiscal.AUTORIZADA && anterior?.status !== StatusNotaFiscal.AUTORIZADA
+          ? TipoAuditoria.EMISSAO_NF
+          : status === StatusNotaFiscal.CANCELADA && anterior?.status !== StatusNotaFiscal.CANCELADA
+            ? TipoAuditoria.CANCELAMENTO_NF
+            : null;
+      if (fato) {
+        await this.auditoria.registrar(tx, {
+          empresaId,
+          usuarioId,
+          tipo: fato,
+          entidade: 'nota_fiscal',
+          entidadeId: id,
+          anterior: { status: anterior?.status ?? null },
+          posterior: { status, numero: nota.numero, serie: nota.serie },
+        });
+      }
+      return nota;
     });
   }
 

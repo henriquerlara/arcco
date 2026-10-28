@@ -26,13 +26,59 @@ export const chatbotConfigSchema = z.object({
   textoPerguntaProjeto: z.string().default('a lista de materiais'),
 });
 
-export const configuracoesEmpresaSchema = z.object({
-  horarioAtendimento: horarioAtendimentoSchema,
-  chatbot: chatbotConfigSchema,
-  onboardingConcluido: z.boolean().optional().default(false),
-  /** Dias corridos até o follow-up automático após enviar orçamento. */
-  diasFollowUpOrcamento: z.number().int().min(1).max(30).optional().default(3),
+/**
+ * Personalização comercial por empresa. Ausência da chave equivale a PADRAO.
+ * Não deriva do segmento: iluminação sem esta chave continua no produto compartilhado.
+ */
+export const PersonalizacaoComercial = {
+  PADRAO: 'PADRAO',
+  ECOLUME: 'ECOLUME',
+} as const;
+export type PersonalizacaoComercial =
+  (typeof PersonalizacaoComercial)[keyof typeof PersonalizacaoComercial];
+
+export const personalizacaoComercialSchema = z
+  .enum([PersonalizacaoComercial.PADRAO, PersonalizacaoComercial.ECOLUME])
+  .default(PersonalizacaoComercial.PADRAO);
+
+const motivoPerdaConfigSchema = z.object({
+  codigo: z.string().trim().min(1).max(40),
+  rotulo: z.string().trim().min(1).max(120),
+  exigeDescricao: z.boolean().default(false),
 });
+
+/**
+ * ECOL-02 — campos opcionais no JSON de empresa.
+ * passthrough preserva chaves futuras / já gravadas sem wipe.
+ */
+export const configuracoesEmpresaSchema = z
+  .object({
+    horarioAtendimento: horarioAtendimentoSchema,
+    chatbot: chatbotConfigSchema,
+    onboardingConcluido: z.boolean().optional().default(false),
+    /** Dias corridos até o follow-up automático após enviar orçamento. */
+    diasFollowUpOrcamento: z.number().int().min(1).max(30).optional().default(3),
+    personalizacaoComercial: personalizacaoComercialSchema,
+    // ECOL-02
+    diasOrcamentoSemMovimentacao: z.number().int().min(1).max(90).optional(),
+    diasChecklistPendente: z.number().int().min(1).max(90).optional(),
+    rtPadraoParceiro: z.number().min(0).max(100).optional(),
+    baseRtComissao: z.literal('TOTAL_PEDIDO').optional(),
+    margemPadraoGlobal: z.number().positive().max(100).nullable().optional(),
+    validadeOrcamentoDias: z.number().int().min(1).max(365).nullable().optional(),
+    /** Sem default: null/ausente = desconto bloqueado sem VER_CUSTOS. */
+    descontoMaximoPercentual: z.number().min(0).max(100).nullable().optional(),
+    modelosPagamentoHabilitados: z.array(z.string()).optional(),
+    motivosPerda: z.array(motivoPerdaConfigSchema).optional(),
+    regimeTributario: z.string().max(40).nullable().optional(),
+    naturezaOperacao: z.string().max(120).nullable().optional(),
+    cfopPadrao: z.string().max(10).nullable().optional(),
+    csosnPadrao: z.string().max(10).nullable().optional(),
+    cstPadrao: z.string().max(10).nullable().optional(),
+    tratamentoSt: z.string().max(200).nullable().optional(),
+    informacoesComplementaresNfe: z.string().max(2000).nullable().optional(),
+  })
+  .passthrough();
 
 export type HorarioAtendimento = z.infer<typeof horarioAtendimentoSchema>;
 export type ChatbotConfig = z.infer<typeof chatbotConfigSchema>;
@@ -62,4 +108,5 @@ export const configuracoesEmpresaPadrao = (): ConfiguracoesEmpresa => ({
   },
   onboardingConcluido: false,
   diasFollowUpOrcamento: 3,
+  personalizacaoComercial: PersonalizacaoComercial.PADRAO,
 });

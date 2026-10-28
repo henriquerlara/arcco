@@ -1,0 +1,18 @@
+/* Paleta da operação clínica. Só vale dentro de .clinica / .clinica-auth. */
+.clinica,
+.clinica-auth {
+  --arcco-preto: #08343a;
+  --arcco-carvao: #0e4f56;
+  --arcco-carvao-claro: #15616d;
+  --arcco-dourado: #7dcec4;
+  --arcco-dourado-hover: #0f766e;
+  --arcco-dourado-claro: #b7ebe3;
+  --arcco-marfim: #e7f4f1;
+  --arcco-superficie: #f3f7f6;
+  --arcco-branco: #ffffff;
+  --arcco-texto: #14343a;
+  --arcco-texto-secundario: #5c7478;
+  --arcco-borda: #d3e4e1;
+  --arcco-sucesso: #1f8a70;
+  --arcco-info: #1a7f8a;
+}

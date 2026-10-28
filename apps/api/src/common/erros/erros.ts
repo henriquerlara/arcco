@@ -24,7 +24,8 @@ export const Erros = {
   naoEncontrado: (codigo: string, mensagem: string) => new AppError(codigo, mensagem, 404),
   invalido: (codigo: string, mensagem: string, detalhes?: unknown) =>
     new AppError(codigo, mensagem, 422, detalhes),
-  conflito: (codigo: string, mensagem: string) => new AppError(codigo, mensagem, 409),
+  conflito: (codigo: string, mensagem: string, detalhes?: unknown) =>
+    new AppError(codigo, mensagem, 409, detalhes),
   credenciaisInvalidas: () =>
     new AppError('CREDENCIAIS_INVALIDAS', 'E-mail ou senha incorretos', 401),
   limiteTaxa: (mensagem = 'Muitas tentativas. Tente novamente em instantes') =>

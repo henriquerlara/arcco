@@ -1,0 +1,114 @@
+// Banco operacional de uma clínica. Não contém obras, negócios nem estoque comercial.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../src/database/generated/saude"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("SAUDE_DATABASE_URL")
+}
+
+enum StatusConsulta {
+  AGENDADA
+  CONFIRMADA
+  REALIZADA
+  CANCELADA
+}
+
+model Paciente {
+  id              String     @id @default(uuid())
+  empresaId       String
+  nome            String
+  telefone        String
+  cpf             String?
+  email           String?
+  nascimento      DateTime?  @db.Date
+  convenio        String?
+  numeroCarteira  String?
+  observacoes     String?
+  criadoEm        DateTime   @default(now())
+  atualizadoEm    DateTime   @updatedAt
+  consultas       Consulta[]
+
+  @@index([empresaId])
+  @@map("pacientes")
+}
+
+model Profissional {
+  id             String          @id @default(uuid())
+  empresaId      String
+  nome           String
+  especialidade  String
+  ativo          Boolean         @default(true)
+  criadoEm       DateTime        @default(now())
+  atualizadoEm   DateTime        @updatedAt
+  grades         GradeSemanal[]
+  consultas      Consulta[]
+
+  @@index([empresaId])
+  @@map("profissionais")
+}
+
+model GradeSemanal {
+  id              String       @id @default(uuid())
+  empresaId       String
+  profissionalId  String
+  diaSemana       Int
+  aberto          Boolean      @default(true)
+  horaInicio      String       @default("08:00")
+  horaFim         String       @default("18:00")
+  profissional    Profissional @relation(fields: [profissionalId], references: [id], onDelete: Cascade)
+
+  @@unique([profissionalId, diaSemana])
+  @@index([empresaId])
+  @@map("grades_semanais")
+}
+
+model Consulta {
+  id              String          @id @default(uuid())
+  empresaId       String
+  pacienteId      String
+  profissionalId  String
+  data            DateTime        @db.Date
+  hora            String
+  especialidade   String
+  convenio        String?
+  numeroCarteira  String?
+  observacoes     String?
+  status          StatusConsulta  @default(AGENDADA)
+  criadoEm        DateTime        @default(now())
+  atualizadoEm    DateTime        @updatedAt
+  paciente        Paciente        @relation(fields: [pacienteId], references: [id])
+  profissional    Profissional    @relation(fields: [profissionalId], references: [id])
+
+  @@unique([profissionalId, data, hora])
+  @@index([empresaId, data])
+  @@map("consultas")
+}
+
+model Medicamento {
+  id             String   @id @default(uuid())
+  empresaId      String
+  nome           String
+  apresentacao   String?
+  estoque        Int      @default(0)
+  estoqueMinimo  Int      @default(5)
+  ativo          Boolean  @default(true)
+  criadoEm       DateTime @default(now())
+  atualizadoEm   DateTime @updatedAt
+
+  @@index([empresaId])
+  @@map("medicamentos")
+}
+
+model ConfiguracaoClinica {
+  id                   String   @id @default(uuid())
+  empresaId            String   @unique
+  duracaoSlotMinutos   Int      @default(30)
+  horizonteDias        Int      @default(30)
+  atualizadoEm         DateTime @updatedAt
+
+  @@map("configuracoes_clinica")
+}

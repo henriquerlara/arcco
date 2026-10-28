@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { cn } from '@/composables/cn';
-import { aplicarMascara, type TipoMascara } from '@/composables/formatadores';
+import { aplicarMascara, maxLengthMascara, type TipoMascara } from '@/composables/formatadores';
 
 const props = defineProps<{
   modelValue?: string | number | null;
@@ -13,6 +13,7 @@ const props = defineProps<{
   id?: string;
   autocomplete?: string;
   mascara?: TipoMascara;
+  maxlength?: number | string;
 }>();
 
 const emit = defineEmits<{
@@ -29,7 +30,7 @@ const classes = computed(() =>
 
 const exibido = computed(() => {
   const bruto = props.modelValue ?? '';
-  return props.mascara ? aplicarMascara(props.mascara, bruto) : bruto;
+  return props.mascara ? aplicarMascara(props.mascara, bruto) : String(bruto);
 });
 
 const modo = computed(() => {
@@ -39,9 +40,29 @@ const modo = computed(() => {
   return undefined;
 });
 
+const limite = computed(() => {
+  if (props.maxlength != null && props.maxlength !== '') return Number(props.maxlength);
+  return props.mascara ? maxLengthMascara(props.mascara) : undefined;
+});
+
 function aoDigitar(evento: Event) {
-  const bruto = (evento.target as HTMLInputElement).value;
-  emit('update:modelValue', props.mascara ? aplicarMascara(props.mascara, bruto) : bruto);
+  const el = evento.target as HTMLInputElement;
+  const bruto = el.value;
+  if (!props.mascara) {
+    emit('update:modelValue', bruto);
+    return;
+  }
+  let proximo = aplicarMascara(props.mascara, bruto);
+  // Para máscaras sem pontuação (IE/agência/conta), respeita maxlength em dígitos.
+  if (props.mascara === 'ie' && limite.value != null) {
+    proximo = proximo.slice(0, limite.value);
+  }
+  emit('update:modelValue', proximo);
+  // Se a máscara rejeitou caracteres, o model pode não mudar e o Vue não
+  // reescreve o DOM — força o valor filtrado na hora.
+  if (el.value !== proximo) {
+    el.value = proximo;
+  }
 }
 </script>
 
@@ -54,6 +75,7 @@ function aoDigitar(evento: Event) {
     :disabled="disabled"
     :autocomplete="autocomplete"
     :inputmode="modo"
+    :maxlength="limite"
     :aria-invalid="invalido || undefined"
     :class="classes"
     @input="aoDigitar"

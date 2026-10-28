@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { ContatosService } from './contatos.service';
 import { AppError } from '../../common/erros/erros';
 import type { PrismaService } from '../../database/prisma.service';
+import type { PlatformPrismaService } from '../../database/platform-prisma.service';
 import type { CamposPersonalizadosService } from '../campos-personalizados/campos-personalizados.service';
+import type { PermissoesService } from '../permissoes/permissoes.service';
 
 /**
  * Teste de isolamento multi-tenant: garante que um usuario de uma empresa nunca
@@ -25,12 +27,21 @@ function criarPrismaFake(contatos: ContatoFake[]): PrismaService {
         ([chave, valor]) => (registro as unknown as Record<string, unknown>)[chave] === valor,
       );
 
+  const comRelacoes = (contato: ContatoFake) => ({
+    ...contato,
+    contatosObras: [],
+    oportunidades: [],
+    _count: { oportunidades: 0, contatosObras: 0 },
+  });
+
   const api = {
     contato: {
-      findFirst: async ({ where }: { where: Record<string, unknown> }) =>
-        contatos.find((c) => casa(c, where)) ?? null,
+      findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+        const contato = contatos.find((c) => casa(c, where));
+        return contato ? comRelacoes(contato) : null;
+      },
       findMany: async ({ where }: { where: Record<string, unknown> }) =>
-        contatos.filter((c) => casa(c, where)),
+        contatos.filter((c) => casa(c, where)).map(comRelacoes),
       count: async ({ where }: { where: Record<string, unknown> }) =>
         contatos.filter((c) => casa(c, where)).length,
       update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
@@ -53,6 +64,14 @@ const camposFake = {
   validarPara: async (_e: string, _ent: unknown, dados: unknown) => dados ?? {},
 } as unknown as CamposPersonalizadosService;
 
+const platformFake = {
+  usuario: { findFirst: async () => null },
+} as unknown as PlatformPrismaService;
+
+const permissoesFake = {
+  empresaEcolume: async () => false,
+} as unknown as PermissoesService;
+
 const EMPRESA_A = 'empresa-a';
 const EMPRESA_B = 'empresa-b';
 
@@ -62,7 +81,10 @@ function montar() {
     { id: 'c2', empresaId: EMPRESA_B, nome: 'Contato B', telefoneNormalizado: '5511900000002' },
   ];
   const prisma = criarPrismaFake(contatos);
-  return { servico: new ContatosService(prisma, camposFake), contatos };
+  return {
+    servico: new ContatosService(prisma, platformFake, camposFake, permissoesFake),
+    contatos,
+  };
 }
 
 describe('Isolamento multi-tenant de contatos', () => {

@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
-import { PerfilUsuario } from '@arcco/contratos';
+import {
+  PerfilUsuario,
+  PersonalizacaoComercial,
+  rotaOcultaNaPersonalizacao,
+} from '@arcco/contratos';
 import { useAutenticacaoStore } from '@/stores/autenticacao';
 
 const rota = useRoute();
@@ -11,15 +15,29 @@ const ehGestor = computed(() =>
   auth.temPerfil(PerfilUsuario.PROPRIETARIO, PerfilUsuario.GESTOR),
 );
 
+const ecolume = computed(
+  () => auth.empresa?.personalizacaoComercial === PersonalizacaoComercial.ECOLUME,
+);
+
+function visivel(nome: string): boolean {
+  return !rotaOcultaNaPersonalizacao(nome, auth.empresa?.personalizacaoComercial);
+}
+
+const ehAdmin = computed(() => auth.temPerfil(PerfilUsuario.PROPRIETARIO));
+
 const itens = computed(() => {
   const base = [{ rotulo: 'Empresa', nome: 'config-empresa' }];
   if (!ehGestor.value) return base;
   return [
     ...base,
+    ...(ecolume.value ? [{ rotulo: 'Parâmetros', nome: 'config-parametros' }] : []),
     { rotulo: 'Equipe', nome: 'config-equipe' },
+    ...(ecolume.value && ehAdmin.value
+      ? [{ rotulo: 'Auditoria', nome: 'config-auditoria' }]
+      : []),
     { rotulo: 'WhatsApp', nome: 'config-whatsapp' },
     { rotulo: 'Nota fiscal', nome: 'config-fiscal' },
-  ];
+  ].filter((item) => visivel(item.nome));
 });
 
 const avancados = computed(() => {
@@ -29,7 +47,7 @@ const avancados = computed(() => {
     { rotulo: 'Funil', nome: 'config-funil' },
     { rotulo: 'Categorias', nome: 'config-categorias' },
     { rotulo: 'Campos', nome: 'config-campos' },
-  ];
+  ].filter((item) => visivel(item.nome));
 });
 </script>
 

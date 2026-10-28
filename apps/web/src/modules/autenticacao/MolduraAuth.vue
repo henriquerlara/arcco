@@ -5,6 +5,7 @@ defineProps<{
   titulo: string;
   subtitulo?: string;
   frase?: string;
+  chamada?: string;
   semRolagem?: boolean;
 }>();
 </script>
@@ -34,7 +35,7 @@ defineProps<{
 
         <div class="relative z-10 max-w-xl py-8">
           <p class="mb-6 text-[11px] font-semibold uppercase tracking-[0.32em] text-dourado-claro/70">
-            Inteligência comercial
+            {{ chamada ?? 'Inteligência comercial' }}
           </p>
           <h2 class="auth-heading fonte-marca text-[clamp(2.5rem,5vw,4.25rem)] leading-[0.98] text-white">
             {{ frase ?? 'O comercial que escuta o WhatsApp.' }}

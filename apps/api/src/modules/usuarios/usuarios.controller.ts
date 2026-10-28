@@ -31,27 +31,36 @@ export class UsuariosController {
   @Post()
   criar(
     @EmpresaAtual() empresaId: string,
+    @UsuarioAtual() usuario: UsuarioAutenticado,
     @Body(new ZodValidationPipe(criarUsuarioSchema)) dto: CriarUsuarioInput,
   ) {
-    return this.servico.criar(empresaId, dto);
+    return this.servico.criar(empresaId, dto, { id: usuario.id, perfil: usuario.perfil });
   }
 
   @Patch(':id')
   atualizar(
     @EmpresaAtual() empresaId: string,
+    @UsuarioAtual() usuario: UsuarioAutenticado,
     @Param('id') id: string,
     @Body(new ZodValidationPipe(atualizarUsuarioSchema)) dto: AtualizarUsuarioInput,
   ) {
-    return this.servico.atualizar(empresaId, id, dto);
+    return this.servico.atualizar(empresaId, id, dto, {
+      id: usuario.id,
+      perfil: usuario.perfil,
+    });
   }
 
   @Post(':id/redefinir-senha')
   redefinirSenha(
     @EmpresaAtual() empresaId: string,
+    @UsuarioAtual() usuario: UsuarioAutenticado,
     @Param('id') id: string,
     @Body(new ZodValidationPipe(redefinirSenhaUsuarioSchema)) dto: { senhaTemporaria: string },
   ) {
-    return this.servico.redefinirSenha(empresaId, id, dto);
+    return this.servico.redefinirSenha(empresaId, id, dto, {
+      id: usuario.id,
+      perfil: usuario.perfil,
+    });
   }
 
   @Delete(':id')
@@ -60,6 +69,6 @@ export class UsuariosController {
     @Param('id') id: string,
     @UsuarioAtual() usuario: UsuarioAutenticado,
   ) {
-    return this.servico.remover(empresaId, id, usuario.id);
+    return this.servico.remover(empresaId, id, { id: usuario.id, perfil: usuario.perfil });
   }
 }

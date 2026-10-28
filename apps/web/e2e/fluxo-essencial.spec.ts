@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { urlDaApi } from './ambiente';
 
 /**
  * Fluxo essencial de aceitação da ARCCO.
@@ -11,16 +12,16 @@ import { test, expect, type Page } from '@playwright/test';
  * automaticamente ignorados (skip) — mas continuam versionados e prontos para o CI.
  */
 
-const API_URL = process.env.VITE_API_URL ?? 'http://localhost:3000';
+const API_URL = urlDaApi();
 const EMAIL = process.env.E2E_EMAIL ?? 'proprietario.iluminacao@demo.arcco.local';
 const SENHA = process.env.E2E_SENHA ?? 'Arcco@123';
 
 async function apiDisponivel(): Promise<boolean> {
   try {
     const controlador = new AbortController();
-    const t = setTimeout(() => controlador.abort(), 2000);
+    const timer = setTimeout(() => controlador.abort(), 8000);
     const resposta = await fetch(`${API_URL}/api/autenticacao/eu`, { signal: controlador.signal });
-    clearTimeout(t);
+    clearTimeout(timer);
     return !!resposta;
   } catch {
     return false;
@@ -30,7 +31,7 @@ async function apiDisponivel(): Promise<boolean> {
 async function entrar(page: Page) {
   await page.goto('/entrar');
   await page.getByLabel('E-mail').fill(EMAIL);
-  await page.getByLabel('Senha').fill(SENHA);
+  await page.locator('#senha').fill(SENHA);
   await page.getByRole('button', { name: 'Acessar minha operação' }).click();
   await page.waitForURL(/\/app\//, { timeout: 15_000 });
 }
@@ -42,12 +43,12 @@ test.describe('Telas públicas (sem API)', () => {
     await expect(page.getByLabel('E-mail')).toBeVisible();
     await expect(page.locator('#senha')).toBeVisible();
     await expect(page.getByRole('img', { name: /ARCCO/ }).first()).toBeVisible();
-    await expect(page.getByText('Da mensagem à próxima ação')).toBeVisible();
+    await expect(page.getByText('Cada mensagem vira contexto, prazo e próxima ação')).toBeVisible();
     await expect(page.locator('main')).toHaveCSS('height', `${page.viewportSize()!.height}px`);
     expect(
       await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight),
     ).toBe(true);
-    const preview = await page.locator('.auth-preview').boundingBox();
+    const preview = await page.locator('.auth-thread').boundingBox();
     const rodape = await page.locator('main footer').boundingBox();
     expect(preview).not.toBeNull();
     expect(rodape).not.toBeNull();
@@ -89,14 +90,14 @@ test.describe('Fluxo autenticado (requer API)', () => {
 
   test('navega pelas seções principais', async ({ page }) => {
     await entrar(page);
-    await page.getByRole('link', { name: 'Negócios' }).click();
+    await page.getByRole('navigation').getByRole('link', { name: 'Negócios', exact: true }).click();
     await expect(page).toHaveURL(/\/app\/pipeline/);
     await expect(page.getByRole('heading', { name: 'Negócios' })).toBeVisible();
 
-    await page.getByRole('link', { name: 'Pessoas' }).click();
+    await page.getByRole('navigation').getByRole('link', { name: 'Pessoas', exact: true }).click();
     await expect(page).toHaveURL(/\/app\/contatos/);
 
-    await page.getByRole('link', { name: 'Conversas' }).click();
+    await page.getByRole('navigation').getByRole('link', { name: 'Conversas', exact: true }).click();
     await expect(page).toHaveURL(/\/app\/conversas/);
   });
 

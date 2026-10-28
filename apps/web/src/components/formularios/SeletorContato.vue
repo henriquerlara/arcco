@@ -20,6 +20,8 @@ const props = defineProps<{
   modelValue?: string | null;
   placeholder?: string;
   invalido?: boolean;
+  /** Filtra só parceiros (ECOL-10/11). */
+  somenteParceiros?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -32,9 +34,18 @@ const buscaDebounced = refDebounced(busca, 300);
 const rotuloSelecionado = ref<string>('');
 
 const { data, isFetching } = useQuery({
-  queryKey: computed(() => ['contatos', 'seletor', buscaDebounced.value]),
+  queryKey: computed(() => [
+    'contatos',
+    'seletor',
+    buscaDebounced.value,
+    props.somenteParceiros,
+  ]),
   queryFn: () =>
-    servicoContatos.listar({ busca: buscaDebounced.value || undefined, porPagina: 20 }),
+    servicoContatos.listar({
+      busca: buscaDebounced.value || undefined,
+      porPagina: 20,
+      parceiro: props.somenteParceiros ? 'true' : undefined,
+    }),
   staleTime: 30_000,
 });
 

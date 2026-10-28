@@ -34,6 +34,7 @@ const aoEnviar = handleSubmit(async (valores) => {
     const sessao = await auth.entrar(valores);
     const redir = rota.query.redirecionar as string | undefined;
     if (sessao.usuario.precisaTrocarSenha) await router.push({ name: 'trocar-senha' });
+    else if (sessao.empresa.ramo === 'SAUDE') await router.push(redir ?? { name: 'saude-inicio' });
     else if (!sessao.empresa.onboardingConcluido) await router.push({ name: 'onboarding' });
     else await router.push(redir ?? { name: 'dashboard' });
   } catch (e) {

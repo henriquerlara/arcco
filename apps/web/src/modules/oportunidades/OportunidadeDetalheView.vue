@@ -41,12 +41,18 @@ import {
   servicoArquivos,
 } from '@/services';
 import PainelOrcamento from './PainelOrcamento.vue';
+import PainelPedidos from './PainelPedidos.vue';
 import PainelNotaFiscal from './PainelNotaFiscal.vue';
 import { formatarMoeda, formatarData, formatarDataHora, parsearMoeda } from '@/composables/formatadores';
 import { lerAjustes } from '@/composables/ajustes';
 import { useNotificacao } from '@/composables/useNotificacao';
 import { useAutenticacaoStore } from '@/stores/autenticacao';
-import { PerfilUsuario } from '@arcco/contratos';
+import {
+  ChaveEtapaSistema,
+  COLUNAS_PRE_VENDA_ECOLUME,
+  PerfilUsuario,
+  PersonalizacaoComercial,
+} from '@arcco/contratos';
 import type {
   EtapaFunil,
   HistoricoEtapaOportunidade,
@@ -78,6 +84,9 @@ const router = useRouter();
 const queryClient = useQueryClient();
 const auth = useAutenticacaoStore();
 const { notificarErro, sucesso } = useNotificacao();
+const ecolume = computed(
+  () => auth.empresa?.personalizacaoComercial === PersonalizacaoComercial.ECOLUME,
+);
 
 const podeExcluir = computed(() =>
   auth.temPerfil(PerfilUsuario.PROPRIETARIO, PerfilUsuario.GESTOR, PerfilUsuario.VENDEDOR),
@@ -111,6 +120,23 @@ const orcamentoResumo = computed(() => {
   const lista = op.value?.orcamentos ?? [];
   if (!lista.length) return null;
   return lista.find((o) => o.vigente) ?? lista[0] ?? null;
+});
+
+/** ECOLUME: pré-venda é derivada; etapa gravada pode ficar defasada após conversão. */
+const rotuloSituacao = computed(() => {
+  const atual = op.value;
+  if (!atual?.etapa) return '';
+  if (!ecolume.value) return atual.etapa.nome;
+  if (atual.etapa.tipo === 'PERDIDA' || atual.etapa.chaveSistema === 'PERDIDO') {
+    return 'Perdido';
+  }
+  const orcs = atual.orcamentos ?? [];
+  const temAberto = orcs.some((o) =>
+    o.status === 'RASCUNHO' || o.status === 'ENVIADO' || o.status === 'ACEITO',
+  );
+  if (temAberto) return 'Orçamento em aberto';
+  if (orcs.some((o) => o.status === 'CONVERTIDO')) return 'Em pós-venda (pedido gerado)';
+  return 'Novo contato';
 });
 
 const arquivosQuery = useQuery({
@@ -348,14 +374,70 @@ const chegadaPorEtapa = computed(() => {
   return mapa;
 });
 
+const temOrcamentoAberto = computed(() =>
+  (op.value?.orcamentos ?? []).some(
+    (o) => o.status === 'RASCUNHO' || o.status === 'ENVIADO' || o.status === 'ACEITO',
+  ),
+);
+const temPedidoGerado = computed(() =>
+  (op.value?.orcamentos ?? []).some((o) => o.status === 'CONVERTIDO'),
+);
+const negocioPerdido = computed(() => {
+  const e = op.value?.etapa;
+  return e?.tipo === 'PERDIDA' || e?.chaveSistema === ChaveEtapaSistema.PERDIDO;
+});
+/** ECOLUME: negócio já só aparece na pós-venda (pedido), sem ORC aberto. */
+const emPosVendaEcolume = computed(
+  () =>
+    ecolume.value &&
+    temPedidoGerado.value &&
+    !temOrcamentoAberto.value &&
+    !negocioPerdido.value,
+);
+
 /**
- * Linha do tempo do funil: etapas abertas em ordem + etapa atual se for ganha/perdida.
- * Feitas = ordem menor que a atual; atual destacada; futuras apagadas.
+ * Linha do tempo do funil.
+ * ECOLUME: só as colunas de pré-venda do kanban (sem Negociação/Fechado legado).
+ * Legado: todas as etapas abertas + ganha/perdida.
  */
 const passosProcesso = computed<PassoProcesso[]>(() => {
   const etapas = (funilQuery.data.value ?? []).filter((e) => e.ativo);
   const atual = op.value?.etapa;
   if (!atual) return [];
+
+  if (ecolume.value) {
+    const porChave = new Map(
+      etapas
+        .filter(
+          (e) =>
+            e.chaveSistema &&
+            (COLUNAS_PRE_VENDA_ECOLUME as readonly string[]).includes(e.chaveSistema),
+        )
+        .map((e) => [e.chaveSistema as string, e]),
+    );
+    return COLUNAS_PRE_VENDA_ECOLUME.map((chave) => {
+      const etapa = porChave.get(chave);
+      if (!etapa) return null;
+      let estado: EstadoPasso = 'futura';
+      if (chave === ChaveEtapaSistema.NOVO_CONTATO) {
+        estado =
+          negocioPerdido.value || temOrcamentoAberto.value || temPedidoGerado.value
+            ? 'feita'
+            : 'atual';
+      } else if (chave === ChaveEtapaSistema.ORCAMENTO_EM_ABERTO) {
+        if (temOrcamentoAberto.value) estado = 'atual';
+        else if (temPedidoGerado.value || negocioPerdido.value) estado = 'feita';
+        else estado = 'futura';
+      } else if (chave === ChaveEtapaSistema.PERDIDO) {
+        estado = negocioPerdido.value ? 'atual' : 'futura';
+      }
+      return {
+        etapa,
+        estado,
+        chegada: chegadaPorEtapa.value.get(etapa.id),
+      };
+    }).filter((p): p is PassoProcesso => p != null);
+  }
 
   const abertas = etapas
     .filter((e) => e.tipo === 'ABERTA')
@@ -650,18 +732,47 @@ async function excluir() {
     <template v-else-if="op">
       <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 class="text-2xl font-semibold tracking-tight text-texto">{{ op.codigo }}</h1>
+          <p class="text-sm font-medium text-texto-secundario">{{ op.codigo }}</p>
+          <h1 class="text-2xl font-semibold tracking-tight text-texto">
+            {{ op.titulo && op.titulo !== op.codigo ? op.titulo : op.codigo }}
+          </h1>
           <div class="mt-2 flex flex-wrap items-center gap-2">
             <BadgeStatus familia="prioridade" :valor="op.prioridade" />
             <span
               v-if="op.etapa"
               class="rounded-sm bg-marfim px-2 py-0.5 text-xs font-medium text-texto"
             >
-              {{ op.etapa.nome }}
+              {{ rotuloSituacao }}
             </span>
             <span v-if="op.categoria" class="text-sm text-texto-secundario">{{ op.categoria.nome }}</span>
-            <span v-if="op.origem" class="text-sm text-texto-secundario">· Origem: {{ op.origem }}</span>
+            <span v-if="op.origemNegocio === 'VIA_PARCEIRO'" class="text-sm text-texto-secundario">
+              · Via parceiro{{ op.parceiro ? `: ${op.parceiro.nome}` : '' }}
+            </span>
+            <span v-else-if="op.origemNegocio === 'CLIENTE_DIRETO'" class="text-sm text-texto-secundario">
+              · Cliente direto
+            </span>
+            <span v-else-if="op.origem" class="text-sm text-texto-secundario">· Origem: {{ op.origem }}</span>
+            <span v-if="op.rtNegocio != null" class="text-sm text-texto-secundario">
+              · RT {{ Number(op.rtNegocio) }}%
+            </span>
           </div>
+          <p
+            v-if="op.obraLogradouro || op.obraCidade"
+            class="mt-2 text-sm text-texto-secundario"
+          >
+            Obra:
+            {{
+              [op.obraLogradouro, op.obraNumero, op.obraBairro, op.obraCidade, op.obraUf]
+                .filter(Boolean)
+                .join(', ')
+            }}
+          </p>
+          <ul v-if="op.anexos?.length" class="mt-2 space-y-1 text-sm text-texto-secundario">
+            <li v-for="anexo in op.anexos" :key="anexo.id">
+              {{ anexo.nome }}
+              <span v-if="anexo.autor"> — {{ anexo.autor.nome }}</span>
+            </li>
+          </ul>
         </div>
         <div class="flex items-center gap-2">
           <Button
@@ -802,17 +913,22 @@ async function excluir() {
             />
           </div>
 
-          <PainelNotaFiscal
-            :oportunidade-id="op.id"
-            :orcamento-id="orcamentoResumo?.id ?? null"
-            :orcamento-convertido="orcamentoResumo?.status === 'CONVERTIDO'"
-            :orcamento-elegivel="
-              !!orcamentoResumo &&
-              orcamentoResumo.itens.length > 0 &&
-              ['RASCUNHO', 'ENVIADO', 'ACEITO', 'CONVERTIDO'].includes(orcamentoResumo.status)
-            "
-            :oportunidade-ganha="op.etapa?.tipo === 'GANHA'"
-          />
+          <PainelPedidos :oportunidade-id="op.id" @atualizado="refetch()" />
+
+          <!-- Legado: emissão a partir do orçamento. Ecolume usa Emitir NF-e no pedido (ECOL-24). -->
+          <div v-if="!ecolume" id="painel-nota-fiscal">
+            <PainelNotaFiscal
+              :oportunidade-id="op.id"
+              :orcamento-id="orcamentoResumo?.id ?? null"
+              :orcamento-convertido="orcamentoResumo?.status === 'CONVERTIDO'"
+              :orcamento-elegivel="
+                !!orcamentoResumo &&
+                orcamentoResumo.itens.length > 0 &&
+                ['RASCUNHO', 'ENVIADO', 'ACEITO', 'CONVERTIDO'].includes(orcamentoResumo.status)
+              "
+              :oportunidade-ganha="op.etapa?.tipo === 'GANHA'"
+            />
+          </div>
 
           <Card>
             <CardHeader>
@@ -823,7 +939,7 @@ async function excluir() {
             </CardHeader>
             <CardContent class="space-y-6">
               <div
-                v-if="emNegociacao"
+                v-if="!ecolume && emNegociacao"
                 class="rounded-lg border border-dourado/35 bg-dourado/8 p-4"
               >
                 <p class="text-sm font-semibold text-texto">Como ficou a proposta?</p>
@@ -853,8 +969,26 @@ async function excluir() {
                   </Button>
                 </div>
               </div>
+              <div
+                v-else-if="emPosVendaEcolume"
+                class="rounded-lg border border-borda bg-marfim/60 p-4"
+              >
+                <p class="text-sm font-semibold text-texto">Pré-venda concluída neste negócio</p>
+                <p class="mt-1 text-sm text-texto-secundario">
+                  O andamento operacional (separação, entrega, NF, finalizado) fica nos
+                  <span class="font-medium text-texto">pedidos</span> na pós-venda do quadro
+                  Negócios — não nestas etapas.
+                </p>
+              </div>
               <p v-else class="text-sm text-texto-secundario">
-                O progresso é atualizado pelas ações realizadas. Você trabalha; a ARCCO registra a história.
+                <template v-if="ecolume">
+                  Pré-venda: Novo contato → Orçamento em aberto → Perdido (ou vira pedido).
+                  Você trabalha; a ARCCO atualiza pelo orçamento e pela conversão.
+                </template>
+                <template v-else>
+                  O progresso é atualizado pelas ações realizadas. Você trabalha; a ARCCO registra a
+                  história.
+                </template>
               </p>
               <ol v-if="passosProcesso.length" class="relative">
                 <li
@@ -933,7 +1067,10 @@ async function excluir() {
                 </ul>
               </div>
 
-              <details class="border-t border-borda pt-4 text-xs text-texto-secundario">
+              <details
+                v-if="!ecolume"
+                class="border-t border-borda pt-4 text-xs text-texto-secundario"
+              >
                 <summary class="cursor-pointer select-none hover:text-texto">Corrigir etapa manualmente</summary>
                 <p class="mt-2">Use somente para corrigir uma informação incorreta.</p>
                 <div class="mt-3 flex flex-wrap gap-2">

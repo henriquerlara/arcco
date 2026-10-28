@@ -5,7 +5,7 @@ services:
     name: arcco-api
     runtime: node
     plan: free
-    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm db:generate && pnpm build:api && pnpm --filter @arcco/api exec prisma migrate deploy --schema prisma/platform/schema.prisma && pnpm --filter @arcco/api exec prisma migrate deploy
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm db:generate && pnpm build:api && cp -r apps/api/src/database/generated apps/api/dist/database/generated && pnpm --filter @arcco/api exec prisma migrate deploy --schema prisma/platform/schema.prisma && pnpm --filter @arcco/api exec prisma migrate deploy
     startCommand: node apps/api/dist/main.js
     envVars:
       - key: NODE_ENV

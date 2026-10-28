@@ -24,8 +24,14 @@ import { ArquivosModule } from './modules/arquivos/arquivos.module';
 import { IaModule } from './modules/ia/ia.module';
 import { EventosModule } from './modules/eventos/eventos.module';
 import { ProdutosModule } from './modules/produtos/produtos.module';
+import { FornecedoresModule } from './modules/fornecedores/fornecedores.module';
 import { OrcamentosModule } from './modules/orcamentos/orcamentos.module';
+import { PedidosModule } from './modules/pedidos/pedidos.module';
 import { FiscalModule } from './modules/fiscal/fiscal.module';
+import { NotasEntradaModule } from './modules/notas-entrada/notas-entrada.module';
+import { SaudeModule } from './modules/saude/saude.module';
+import { PermissoesModule } from './modules/permissoes/permissoes.module';
+import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 
 @Module({
   imports: [
@@ -35,6 +41,8 @@ import { FiscalModule } from './modules/fiscal/fiscal.module';
       envFilePath: ['.env', '../../.env'],
     }),
     PrismaModule,
+    AuditoriaModule,
+    PermissoesModule,
     EventosModule,
     IaModule,
     AutenticacaoModule,
@@ -54,8 +62,12 @@ import { FiscalModule } from './modules/fiscal/fiscal.module';
     WhatsAppModule,
     ArquivosModule,
     ProdutosModule,
+    FornecedoresModule,
     OrcamentosModule,
+    PedidosModule,
     FiscalModule,
+    NotasEntradaModule,
+    SaudeModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: FiltroExcecaoGlobal },

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, type Component } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import {
   LayoutDashboard,
@@ -7,15 +7,23 @@ import {
   KanbanSquare,
   CalendarClock,
   Users,
+  Handshake,
   Building2,
   Package,
   Boxes,
+  Truck,
+  FileText,
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
   LogOut,
 } from 'lucide-vue-next';
-import { PerfilUsuario, PERFIL_ROTULOS } from '@arcco/contratos';
+import {
+  PerfilUsuario,
+  PERFIL_ROTULOS,
+  itensNavegacaoComercial,
+  type ItemNavegacaoComercial,
+} from '@arcco/contratos';
 import MarcaArcco from '@/components/marca/MarcaArcco.vue';
 import { useInterfaceStore } from '@/stores/interface';
 import { useAutenticacaoStore } from '@/stores/autenticacao';
@@ -43,33 +51,35 @@ const podeCatalogo = computed(() =>
   ),
 );
 
-const principais = computed(() => {
-  const itens = [
-    { nome: 'dashboard', rotulo: 'Visão geral', icone: LayoutDashboard, to: '/app/dashboard' },
-    { nome: 'conversas', rotulo: 'Conversas', icone: MessagesSquare, to: '/app/conversas' },
-    { nome: 'pipeline', rotulo: 'Negócios', icone: KanbanSquare, to: '/app/pipeline' },
-    { nome: 'agenda', rotulo: 'Agenda', icone: CalendarClock, to: '/app/agenda' },
-  ];
-  if (podeCatalogo.value) {
-    itens.push(
-      { nome: 'produtos', rotulo: 'Produtos', icone: Boxes, to: '/app/produtos' },
-      { nome: 'estoque', rotulo: 'Estoque', icone: Package, to: '/app/estoque' },
-    );
-  }
-  itens.push(
-    { nome: 'contatos', rotulo: 'Pessoas', icone: Users, to: '/app/contatos' },
-    { nome: 'obras', rotulo: 'Projetos', icone: Building2, to: '/app/obras' },
-  );
-  if (podeConfigurar.value) {
-    itens.push({
-      nome: 'configuracoes',
-      rotulo: 'Configurações',
-      icone: Settings,
-      to: '/app/configuracoes/empresa',
-    });
-  }
-  return itens;
-});
+const icones: Record<string, Component> = {
+  dashboard: LayoutDashboard,
+  conversas: MessagesSquare,
+  pipeline: KanbanSquare,
+  agenda: CalendarClock,
+  produtos: Boxes,
+  estoque: Package,
+  fornecedores: Truck,
+  fiscal: FileText,
+  contatos: Users,
+  clientes: Users,
+  parceiros: Handshake,
+  obras: Building2,
+  configuracoes: Settings,
+};
+
+const principais = computed(() =>
+  itensNavegacaoComercial({
+    personalizacao: auth.empresa?.personalizacaoComercial,
+    podeCatalogo: podeCatalogo.value,
+    podeConfigurar: podeConfigurar.value,
+    chavesComerciais: auth.permissoesComerciais,
+  }).map((item: ItemNavegacaoComercial) => ({
+    nome: item.id,
+    rotulo: item.rotulo,
+    to: item.rota,
+    icone: icones[item.id] ?? LayoutDashboard,
+  })),
+);
 
 function ativo(to: string): boolean {
   return rota.path === to || rota.path.startsWith(to + '/');

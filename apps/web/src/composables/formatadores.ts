@@ -65,7 +65,39 @@ export function tempoRelativo(valor: string | Date | null | undefined): string {
   return formatDistanceToNow(data, { addSuffix: true, locale: ptBR });
 }
 
-export type TipoMascara = 'telefone' | 'documento' | 'cnpj' | 'cep' | 'uf' | 'ncm' | 'moeda';
+export type TipoMascara =
+  | 'telefone'
+  | 'documento'
+  | 'cpf'
+  | 'cnpj'
+  | 'cep'
+  | 'uf'
+  | 'ncm'
+  | 'moeda'
+  | 'ie';
+
+/** Comprimento máximo do valor já formatado (ajuda o teclado e evita colar texto longo). */
+export function maxLengthMascara(tipo: TipoMascara): number | undefined {
+  switch (tipo) {
+    case 'cpf':
+      return 14;
+    case 'cnpj':
+    case 'documento':
+      return 18;
+    case 'cep':
+      return 9;
+    case 'uf':
+      return 2;
+    case 'ncm':
+      return 10;
+    case 'telefone':
+      return 19;
+    case 'ie':
+      return 20;
+    case 'moeda':
+      return undefined;
+  }
+}
 
 /** Valor numérico no campo, sem o símbolo R$. */
 export function formatarMoedaCampo(valor: number | null | undefined): string {
@@ -139,7 +171,10 @@ export function aplicarMascara(tipo: TipoMascara, valor: string | number | null 
     if (d.length <= 6) return `${d.slice(0, 4)}.${d.slice(4)}`;
     return `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6)}`;
   }
+  if (tipo === 'ie') return digitos(texto, 20);
+  if (tipo === 'cpf') return mascaraCpf(digitos(texto, 11));
   if (tipo === 'cnpj') return mascaraCnpj(digitos(texto, 14));
+  // documento: CPF ou CNPJ conforme a quantidade de dígitos digitados
   const doc = digitos(texto, 14);
   return doc.length > 11 ? mascaraCnpj(doc) : mascaraCpf(doc);
 }

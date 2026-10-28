@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
 import { useQueryClient } from '@tanstack/vue-query';
-import { TipoAtividade } from '@arcco/contratos';
+import { PersonalizacaoComercial, TipoAtividade } from '@arcco/contratos';
 import type { Atividade } from '@/types';
 import Dialog from '@/components/ui/Dialog.vue';
 import Input from '@/components/ui/Input.vue';
@@ -13,7 +13,12 @@ import SeletorUsuario from '@/components/formularios/SeletorUsuario.vue';
 import SeletorContato from '@/components/formularios/SeletorContato.vue';
 import { servicoAtividades } from '@/services';
 import { useNotificacao } from '@/composables/useNotificacao';
-import { ROTULO_TIPO_ATIVIDADE, opcoesDe } from '@/composables/rotulos';
+import {
+  ROTULO_TIPO_ATIVIDADE,
+  ROTULO_TIPO_ATIVIDADE_ECOLUME,
+  opcoesDe,
+} from '@/composables/rotulos';
+import { useAutenticacaoStore } from '@/stores/autenticacao';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -28,11 +33,22 @@ const emit = defineEmits<{
   (e: 'salvo', atividade: Atividade): void;
 }>();
 
+const auth = useAutenticacaoStore();
+const ecolume = computed(
+  () => auth.empresa?.personalizacaoComercial === PersonalizacaoComercial.ECOLUME,
+);
+
 const queryClient = useQueryClient();
 const { notificarErro, sucesso } = useNotificacao();
 const salvando = ref(false);
 
-const opcoesTipo = opcoesDe(ROTULO_TIPO_ATIVIDADE);
+const opcoesTipo = computed(() =>
+  ecolume.value
+    ? opcoesDe(ROTULO_TIPO_ATIVIDADE_ECOLUME as Record<string, string>).filter(
+        (o) => o.valor !== TipoAtividade.ENTREGA,
+      )
+    : opcoesDe(ROTULO_TIPO_ATIVIDADE),
+);
 
 const aberto = computed({
   get: () => props.modelValue,

@@ -16,11 +16,14 @@ describe('formatadores', () => {
   it('aplica máscaras de digitação', () => {
     expect(aplicarMascara('telefone', '11988887777')).toBe('(11) 98888-7777');
     expect(aplicarMascara('documento', '12345678901')).toBe('123.456.789-01');
-    expect(aplicarMascara('cnpj', '12345678000199')).toBe('12.345.678/0001-99');
-    expect(aplicarMascara('cep', '30130000')).toBe('30130-000');
+    expect(aplicarMascara('cpf', '12345678901abc')).toBe('123.456.789-01');
+    expect(aplicarMascara('cnpj', '12a345678000199xyz')).toBe('12.345.678/0001-99');
+    expect(aplicarMascara('cnpj', '123456780001991234')).toBe('12.345.678/0001-99');
+    expect(aplicarMascara('cep', '30130000abc')).toBe('30130-000');
     expect(aplicarMascara('uf', 'mg1')).toBe('MG');
     expect(aplicarMascara('moeda', 1250.5)).toBe('1.250,50');
     expect(aplicarMascara('ncm', '94051000')).toBe('9405.10.00');
+    expect(aplicarMascara('ie', '12.345-a')).toBe('12345');
   });
 
   it('formata telefone brasileiro', () => {

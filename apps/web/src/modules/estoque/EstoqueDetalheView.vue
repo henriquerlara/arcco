@@ -24,7 +24,14 @@ import { servicoProdutos } from '@/services';
 import { useNotificacao } from '@/composables/useNotificacao';
 import { formatarNumero, formatarDataHora, formatarMoeda } from '@/composables/formatadores';
 import { useAutenticacaoStore } from '@/stores/autenticacao';
-import { PerfilUsuario } from '@arcco/contratos';
+import {
+  MotivoAjusteEstoque,
+  MOTIVO_AJUSTE_ESTOQUE_ROTULOS,
+  PerfilUsuario,
+  PermissaoComercial,
+  PersonalizacaoComercial,
+} from '@arcco/contratos';
+import Select from '@/components/ui/Select.vue';
 
 const rota = useRoute();
 const id = computed(() => String(rota.params.id));
@@ -35,6 +42,19 @@ const { notificarErro, sucesso } = useNotificacao();
 const podeEditar = computed(() =>
   auth.temPerfil(PerfilUsuario.PROPRIETARIO, PerfilUsuario.GESTOR, PerfilUsuario.VENDEDOR),
 );
+const ecolume = computed(
+  () => auth.empresa?.personalizacaoComercial === PersonalizacaoComercial.ECOLUME,
+);
+const podeAjustar = computed(
+  () => podeEditar.value && (!ecolume.value || auth.temPermissaoComercial(PermissaoComercial.AJUSTAR_ESTOQUE)),
+);
+const podeInformarCusto = computed(
+  () => ecolume.value && auth.temPermissaoComercial(PermissaoComercial.VER_CUSTOS),
+);
+const opcoesMotivo = Object.values(MotivoAjusteEstoque).map((valor) => ({
+  valor,
+  rotulo: MOTIVO_AJUSTE_ESTOQUE_ROTULOS[valor],
+}));
 
 const { data: produto, isLoading, isError, error, refetch } = useQuery({
   queryKey: computed(() => ['estoque', 'produto', id.value]),
@@ -74,9 +94,23 @@ const modalEntrada = ref(false);
 const modalAjuste = ref(false);
 const qtdEntrada = ref(1);
 const obsEntrada = ref('');
+const modoAjuste = ref<'final' | 'diferenca'>('final');
 const saldoContado = ref(0);
+const diferencaAjuste = ref(0);
+const motivoAjuste = ref<string>(MotivoAjusteEstoque.INVENTARIO);
 const obsAjuste = ref('');
+const custoAjuste = ref<number | null>(null);
+const custoReferenciaAjuste = ref<number | null>(null);
 const salvando = ref(false);
+
+const saldoAnteriorAjuste = computed(() => produto.value?.estoqueAtual ?? 0);
+const saldoResultanteAjuste = computed(() => {
+  if (modoAjuste.value === 'diferenca') return saldoAnteriorAjuste.value + Number(diferencaAjuste.value || 0);
+  return Number(saldoContado.value);
+});
+const diferencaCalculada = computed(
+  () => saldoResultanteAjuste.value - saldoAnteriorAjuste.value,
+);
 
 function abrirEntrada() {
   qtdEntrada.value = 1;
@@ -85,8 +119,13 @@ function abrirEntrada() {
 }
 
 function abrirAjuste() {
+  modoAjuste.value = 'final';
   saldoContado.value = produto.value?.estoqueAtual ?? 0;
+  diferencaAjuste.value = 0;
+  motivoAjuste.value = MotivoAjusteEstoque.INVENTARIO;
   obsAjuste.value = '';
+  custoAjuste.value = null;
+  custoReferenciaAjuste.value = null;
   modalAjuste.value = true;
 }
 
@@ -105,10 +144,42 @@ async function confirmarEntrada() {
 }
 
 async function confirmarAjuste() {
-  if (!obsAjuste.value.trim()) return;
+  if (ecolume.value) {
+    if (!motivoAjuste.value) return;
+  } else if (!obsAjuste.value.trim()) {
+    return;
+  }
   salvando.value = true;
   try {
-    await servicoProdutos.ajuste(id.value, Number(saldoContado.value), obsAjuste.value.trim());
+    if (ecolume.value) {
+      const corpo: {
+        saldoContado?: number;
+        diferenca?: number;
+        saldoAnteriorEsperado?: number;
+        motivo: string;
+        observacao?: string;
+        precoUnitarioCusto?: number;
+        custoReferenciaSaldo?: number;
+      } = {
+        motivo: motivoAjuste.value,
+        observacao: obsAjuste.value.trim() || undefined,
+        saldoAnteriorEsperado: saldoAnteriorAjuste.value,
+      };
+      if (modoAjuste.value === 'diferenca') corpo.diferenca = Number(diferencaAjuste.value);
+      else corpo.saldoContado = Number(saldoContado.value);
+      if (podeInformarCusto.value && custoAjuste.value != null && diferencaCalculada.value > 0) {
+        corpo.precoUnitarioCusto = Number(custoAjuste.value);
+        if (custoReferenciaAjuste.value != null) {
+          corpo.custoReferenciaSaldo = Number(custoReferenciaAjuste.value);
+        }
+      }
+      await servicoProdutos.ajuste(id.value, corpo);
+    } else {
+      await servicoProdutos.ajuste(id.value, {
+        saldoContado: Number(saldoContado.value),
+        observacao: obsAjuste.value.trim(),
+      });
+    }
     sucesso('Ajuste registrado.');
     modalAjuste.value = false;
     await Promise.all([refetch(), refetchMovs(), queryClient.invalidateQueries({ queryKey: ['estoque'] })]);
@@ -171,8 +242,8 @@ async function confirmarAjuste() {
             <Button tamanho="sm" @click="abrirEntrada">
               <PackagePlus class="size-4" /> Entrada
             </Button>
-            <Button tamanho="sm" variante="contorno" @click="abrirAjuste">
-              <SlidersHorizontal class="size-4" /> Ajuste
+            <Button v-if="podeAjustar" tamanho="sm" variante="contorno" @click="abrirAjuste">
+              <SlidersHorizontal class="size-4" /> Ajustar estoque
             </Button>
           </div>
           <p v-else class="mt-4 text-sm text-texto-secundario">
@@ -199,6 +270,9 @@ async function confirmarAjuste() {
                     <Badge :variante="varianteTipo(m.tipo)">{{ ROTULO_TIPO[m.tipo] }}</Badge>
                     <span class="text-xs text-texto-secundario">{{ formatarDataHora(m.criadoEm) }}</span>
                   </div>
+                  <p v-if="m.motivo" class="mt-1 text-xs text-texto-secundario">
+                    {{ MOTIVO_AJUSTE_ESTOQUE_ROTULOS[m.motivo as keyof typeof MOTIVO_AJUSTE_ESTOQUE_ROTULOS] ?? m.motivo }}
+                  </p>
                   <p v-if="m.observacao" class="mt-1 text-sm text-texto">{{ m.observacao }}</p>
                   <RouterLink
                     v-if="m.oportunidadeId"
@@ -243,16 +317,79 @@ async function confirmarAjuste() {
       </div>
     </Dialog>
 
-    <Dialog v-model="modalAjuste" titulo="Ajuste de inventário">
+    <Dialog v-model="modalAjuste" :titulo="ecolume ? 'Ajustar estoque' : 'Ajuste de inventário'">
       <div class="space-y-3">
-        <div class="space-y-1.5">
-          <Label obrigatorio>Saldo contado</Label>
-          <Input v-model.number="saldoContado" type="number" step="0.01" />
-        </div>
-        <div class="space-y-1.5">
-          <Label obrigatorio>Motivo</Label>
-          <Textarea v-model="obsAjuste" :rows="2" />
-        </div>
+        <template v-if="ecolume">
+          <dl class="grid grid-cols-3 gap-2 rounded-sm border border-borda p-3 text-sm">
+            <div>
+              <dt class="text-texto-secundario">Anterior</dt>
+              <dd class="font-medium">{{ formatarNumero(saldoAnteriorAjuste) }}</dd>
+            </div>
+            <div>
+              <dt class="text-texto-secundario">Diferença</dt>
+              <dd class="font-medium">{{ formatarNumero(diferencaCalculada) }}</dd>
+            </div>
+            <div>
+              <dt class="text-texto-secundario">Resultante</dt>
+              <dd class="font-medium">{{ formatarNumero(saldoResultanteAjuste) }}</dd>
+            </div>
+          </dl>
+          <div class="flex gap-2 text-sm">
+            <Button
+              tamanho="sm"
+              :variante="modoAjuste === 'final' ? 'primario' : 'contorno'"
+              @click="modoAjuste = 'final'"
+            >
+              Saldo final
+            </Button>
+            <Button
+              tamanho="sm"
+              :variante="modoAjuste === 'diferenca' ? 'primario' : 'contorno'"
+              @click="modoAjuste = 'diferenca'"
+            >
+              Diferença
+            </Button>
+          </div>
+          <div v-if="modoAjuste === 'final'" class="space-y-1.5">
+            <Label obrigatorio>Saldo final</Label>
+            <Input v-model.number="saldoContado" type="number" step="0.01" />
+          </div>
+          <div v-else class="space-y-1.5">
+            <Label obrigatorio>Diferença</Label>
+            <Input v-model.number="diferencaAjuste" type="number" step="0.01" />
+          </div>
+          <div class="space-y-1.5">
+            <Label obrigatorio>Motivo</Label>
+            <Select v-model="motivoAjuste" :opcoes="opcoesMotivo" />
+          </div>
+          <div class="space-y-1.5">
+            <Label>Observação</Label>
+            <Textarea v-model="obsAjuste" :rows="2" />
+          </div>
+          <template v-if="podeInformarCusto && diferencaCalculada > 0">
+            <div class="space-y-1.5">
+              <Label>Custo unitário</Label>
+              <Input v-model.number="custoAjuste" type="number" min="0" step="0.0001" />
+            </div>
+            <div class="space-y-1.5">
+              <Label>Custo de referência do saldo</Label>
+              <Input v-model.number="custoReferenciaAjuste" type="number" min="0" step="0.0001" />
+              <p class="text-xs text-texto-secundario">
+                Obrigatório se o produto já tem saldo e ainda não tem custo médio.
+              </p>
+            </div>
+          </template>
+        </template>
+        <template v-else>
+          <div class="space-y-1.5">
+            <Label obrigatorio>Saldo contado</Label>
+            <Input v-model.number="saldoContado" type="number" step="0.01" />
+          </div>
+          <div class="space-y-1.5">
+            <Label obrigatorio>Motivo</Label>
+            <Textarea v-model="obsAjuste" :rows="2" />
+          </div>
+        </template>
         <div class="flex justify-end gap-2">
           <Button variante="secundario" @click="modalAjuste = false">Cancelar</Button>
           <Button :carregando="salvando" @click="confirmarAjuste">Registrar</Button>

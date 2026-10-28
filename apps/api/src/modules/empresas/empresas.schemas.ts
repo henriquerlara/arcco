@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   chatbotConfigSchema,
   horarioAtendimentoSchema,
+  ModeloPagamentoPedido,
   SegmentoEmpresa,
 } from '@arcco/contratos';
 
@@ -35,5 +36,37 @@ export const atualizarOnboardingSchema = z.object({
   onboardingConcluido: z.boolean().optional(),
 });
 
+const motivoPerdaSchema = z.object({
+  codigo: z.string().trim().min(1).max(40),
+  rotulo: z.string().trim().min(1).max(120),
+  exigeDescricao: z.boolean().default(false),
+});
+
+/** ECOL-02 — parâmetros comerciais (sem segredos de certificado/token). */
+export const atualizarParametrosComerciaisSchema = z.object({
+  diasOrcamentoSemMovimentacao: z.number().int().min(1).max(90).optional(),
+  diasChecklistPendente: z.number().int().min(1).max(90).optional(),
+  rtPadraoParceiro: z.number().min(0).max(100).optional(),
+  baseRtComissao: z.literal('TOTAL_PEDIDO').optional(),
+  margemPadraoGlobal: z.number().positive().max(100).nullable().optional(),
+  validadeOrcamentoDias: z.number().int().min(1).max(365).nullable().optional(),
+  descontoMaximoPercentual: z.number().min(0).max(100).nullable().optional(),
+  modelosPagamentoHabilitados: z
+    .array(z.nativeEnum(ModeloPagamentoPedido))
+    .min(1)
+    .optional(),
+  motivosPerda: z.array(motivoPerdaSchema).min(1).max(40).optional(),
+  regimeTributario: z.string().trim().max(40).nullable().optional(),
+  naturezaOperacao: z.string().trim().max(120).nullable().optional(),
+  cfopPadrao: z.string().trim().max(10).nullable().optional(),
+  csosnPadrao: z.string().trim().max(10).nullable().optional(),
+  cstPadrao: z.string().trim().max(10).nullable().optional(),
+  tratamentoSt: z.string().trim().max(200).nullable().optional(),
+  informacoesComplementaresNfe: z.string().trim().max(2000).nullable().optional(),
+});
+
 export type AtualizarEmpresaInput = z.infer<typeof atualizarEmpresaSchema>;
 export type AtualizarOnboardingInput = z.infer<typeof atualizarOnboardingSchema>;
+export type AtualizarParametrosComerciaisInput = z.infer<
+  typeof atualizarParametrosComerciaisSchema
+>;

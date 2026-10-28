@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useQuery } from '@tanstack/vue-query';
 import { Filter, Plus } from 'lucide-vue-next';
+import { PersonalizacaoComercial } from '@arcco/contratos';
 import CabecalhoPagina from '@/components/layout/CabecalhoPagina.vue';
 import EstadoErro from '@/components/compartilhados/EstadoErro.vue';
 import Skeleton from '@/components/compartilhados/Skeleton.vue';
@@ -10,9 +11,16 @@ import SeletorUsuario from '@/components/formularios/SeletorUsuario.vue';
 import SeletorCategoria from '@/components/formularios/SeletorCategoria.vue';
 import Button from '@/components/ui/Button.vue';
 import ColunaPipeline from './ColunaPipeline.vue';
+import PipelineEcolume from './PipelineEcolume.vue';
 import OportunidadeFormulario from '@/modules/oportunidades/OportunidadeFormulario.vue';
 import { servicoOportunidades, type ColunaPipeline as TColuna } from '@/services';
 import { formatarMoeda } from '@/composables/formatadores';
+import { useAutenticacaoStore } from '@/stores/autenticacao';
+
+const auth = useAutenticacaoStore();
+const ecolume = computed(
+  () => auth.empresa?.personalizacaoComercial === PersonalizacaoComercial.ECOLUME,
+);
 
 const router = useRouter();
 
@@ -29,13 +37,16 @@ const filtros = computed(() => ({
 const { data, isLoading, isError, error, refetch } = useQuery({
   queryKey: computed(() => ['pipeline', filtros.value]),
   queryFn: () => servicoOportunidades.pipeline(filtros.value),
+  enabled: computed(() => !ecolume.value),
 });
 
 const colunas = ref<TColuna[]>([]);
 watch(
   data,
   (v) => {
-    if (v) colunas.value = v.map((c) => ({ etapa: c.etapa, oportunidades: [...c.oportunidades] }));
+    if (v && Array.isArray(v)) {
+      colunas.value = v.map((c) => ({ etapa: c.etapa, oportunidades: [...c.oportunidades] }));
+    }
   },
   { immediate: true },
 );
@@ -57,11 +68,11 @@ function abrirParaOrcamento(id: string) {
     query: { enviarOrcamento: '1' },
   });
 }
-
 </script>
 
 <template>
-  <div class="flex h-full flex-col gap-5">
+  <PipelineEcolume v-if="ecolume" />
+  <div v-else class="flex h-full flex-col gap-5">
     <CabecalhoPagina
       titulo="Negócios"
       :descricao="`Progresso atualizado pelas ações do time · ${formatarMoeda(valorTotal)} em jogo`"

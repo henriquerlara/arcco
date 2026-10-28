@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
+import { PersonalizacaoComercial, rotaOcultaNaPersonalizacao } from '@arcco/contratos';
 import { useAutenticacaoStore } from '@/stores/autenticacao';
 
 const rotas: RouteRecordRaw[] = [
@@ -72,6 +73,30 @@ const rotas: RouteRecordRaw[] = [
         meta: { titulo: 'Pessoa' },
       },
       {
+        path: 'clientes',
+        name: 'clientes',
+        component: () => import('@/modules/contatos/ContatosView.vue'),
+        meta: { titulo: 'Clientes' },
+      },
+      {
+        path: 'clientes/:id',
+        name: 'cliente-detalhe',
+        component: () => import('@/modules/contatos/ContatoDetalheView.vue'),
+        meta: { titulo: 'Cliente' },
+      },
+      {
+        path: 'parceiros',
+        name: 'parceiros',
+        component: () => import('@/modules/contatos/ContatosView.vue'),
+        meta: { titulo: 'Parceiros' },
+      },
+      {
+        path: 'parceiros/:id',
+        name: 'parceiro-detalhe',
+        component: () => import('@/modules/contatos/ContatoDetalheView.vue'),
+        meta: { titulo: 'Parceiro' },
+      },
+      {
         path: 'obras',
         name: 'obras',
         component: () => import('@/modules/obras/ObrasView.vue'),
@@ -102,6 +127,23 @@ const rotas: RouteRecordRaw[] = [
         meta: { titulo: 'Extrato de estoque' },
       },
       {
+        path: 'fornecedores',
+        name: 'fornecedores',
+        component: () => import('@/modules/fornecedores/FornecedoresView.vue'),
+        meta: { titulo: 'Fornecedores' },
+      },
+      {
+        path: 'fiscal',
+        name: 'fiscal',
+        component: () => import('@/modules/fiscal/FiscalView.vue'),
+        meta: { titulo: 'Fiscal' },
+      },
+      {
+        path: 'fiscal/notas-entrada',
+        name: 'fiscal-notas-entrada',
+        redirect: { name: 'fiscal', query: { aba: 'entrada' } },
+      },
+      {
         path: 'oportunidades/:id',
         name: 'oportunidade-detalhe',
         component: () => import('@/modules/oportunidades/OportunidadeDetalheView.vue'),
@@ -118,6 +160,12 @@ const rotas: RouteRecordRaw[] = [
         meta: { titulo: 'Configurações · Empresa' },
       },
       {
+        path: 'configuracoes/parametros',
+        name: 'config-parametros',
+        component: () => import('@/modules/configuracoes/ConfigParametrosView.vue'),
+        meta: { titulo: 'Configurações · Parâmetros' },
+      },
+      {
         path: 'configuracoes/produtos',
         redirect: { name: 'produtos' },
       },
@@ -126,6 +174,12 @@ const rotas: RouteRecordRaw[] = [
         name: 'config-equipe',
         component: () => import('@/modules/configuracoes/ConfigEquipeView.vue'),
         meta: { titulo: 'Configurações · Equipe' },
+      },
+      {
+        path: 'configuracoes/auditoria',
+        name: 'config-auditoria',
+        component: () => import('@/modules/configuracoes/ConfigAuditoriaView.vue'),
+        meta: { titulo: 'Configurações · Auditoria' },
       },
       {
         path: 'configuracoes/categorias',
@@ -166,6 +220,61 @@ const rotas: RouteRecordRaw[] = [
     ],
   },
   {
+    path: '/saude/entrar',
+    name: 'saude-entrar',
+    component: () => import('@/modules/saude/EntrarSaudeView.vue'),
+    meta: { publico: true, ramo: 'SAUDE' },
+  },
+  {
+    path: '/saude',
+    component: () => import('@/modules/saude/CascaSaude.vue'),
+    meta: { requerAuth: true, ramo: 'SAUDE' },
+    children: [
+      {
+        path: '',
+        name: 'saude-inicio',
+        component: () => import('@/modules/saude/InicioSaudeView.vue'),
+        meta: { titulo: 'Início', ramo: 'SAUDE', requerAuth: true },
+      },
+      {
+        path: 'agenda',
+        name: 'saude-agenda',
+        component: () => import('@/modules/saude/AgendaSaudeView.vue'),
+        meta: { titulo: 'Agenda', ramo: 'SAUDE', requerAuth: true },
+      },
+      {
+        path: 'consultas',
+        name: 'saude-consultas',
+        component: () => import('@/modules/saude/ConsultasSaudeView.vue'),
+        meta: { titulo: 'Consultas', ramo: 'SAUDE', requerAuth: true },
+      },
+      {
+        path: 'pacientes',
+        name: 'saude-pacientes',
+        component: () => import('@/modules/saude/PacientesSaudeView.vue'),
+        meta: { titulo: 'Pacientes', ramo: 'SAUDE', requerAuth: true },
+      },
+      {
+        path: 'profissionais',
+        name: 'saude-profissionais',
+        component: () => import('@/modules/saude/ProfissionaisSaudeView.vue'),
+        meta: { titulo: 'Profissionais', ramo: 'SAUDE', requerAuth: true },
+      },
+      {
+        path: 'medicamentos',
+        name: 'saude-medicamentos',
+        component: () => import('@/modules/saude/MedicamentosSaudeView.vue'),
+        meta: { titulo: 'Medicamentos', ramo: 'SAUDE', requerAuth: true },
+      },
+      {
+        path: 'clinica',
+        name: 'saude-clinica',
+        component: () => import('@/modules/saude/ClinicaSaudeView.vue'),
+        meta: { titulo: 'Clínica', ramo: 'SAUDE', requerAuth: true },
+      },
+    ],
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'nao-encontrado',
     component: () => import('@/views/NaoEncontradoView.vue'),
@@ -190,19 +299,51 @@ router.beforeEach(async (para) => {
 
   const requerAuth = para.matched.some((r) => r.meta.requerAuth);
   const publico = para.meta.publico === true;
+  const rotaSaude = para.matched.some((r) => r.meta.ramo === 'SAUDE');
+  const contaSaude = auth.empresa?.ramo === 'SAUDE';
 
   if (requerAuth && !auth.autenticado) {
-    return { name: 'entrar', query: { redirecionar: para.fullPath } };
+    return {
+      name: rotaSaude ? 'saude-entrar' : 'entrar',
+      query: { redirecionar: para.fullPath },
+    };
   }
 
   if (auth.autenticado) {
-    // Bloqueia navegação enquanto senha temporária não for trocada
     if (auth.precisaTrocarSenha && para.name !== 'trocar-senha') {
       return { name: 'trocar-senha' };
     }
 
-    // Força onboarding quando ainda não concluído
+    if (contaSaude && requerAuth && !rotaSaude && para.name !== 'trocar-senha') {
+      return { name: 'saude-inicio' };
+    }
+
+    if (!contaSaude && rotaSaude && requerAuth) {
+      return { name: 'dashboard' };
+    }
+
+    if (!contaSaude) {
+      const nomeRota = typeof para.name === 'string' ? para.name : '';
+      const personalizacao = auth.empresa?.personalizacaoComercial;
+      if (rotaOcultaNaPersonalizacao(nomeRota, personalizacao)) {
+        return { name: 'dashboard' };
+      }
+      if (personalizacao === PersonalizacaoComercial.ECOLUME && nomeRota === 'contatos') {
+        return { name: 'clientes', query: para.query };
+      }
+      if (personalizacao === PersonalizacaoComercial.ECOLUME && nomeRota === 'contato-detalhe') {
+        return { name: 'cliente-detalhe', params: para.params, query: para.query };
+      }
+      if (
+        personalizacao !== PersonalizacaoComercial.ECOLUME &&
+        (nomeRota === 'parceiros' || nomeRota === 'parceiro-detalhe')
+      ) {
+        return { name: 'dashboard' };
+      }
+    }
+
     if (
+      !contaSaude &&
       !auth.precisaTrocarSenha &&
       !auth.onboardingConcluido &&
       requerAuth &&
@@ -211,9 +352,8 @@ router.beforeEach(async (para) => {
       return { name: 'onboarding' };
     }
 
-    // Usuário autenticado não deve ver telas públicas de entrada
-    if (publico && (para.name === 'entrar' || para.name === 'cadastro')) {
-      return { name: 'dashboard' };
+    if (publico && (para.name === 'entrar' || para.name === 'cadastro' || para.name === 'saude-entrar')) {
+      return { name: contaSaude ? 'saude-inicio' : 'dashboard' };
     }
   }
 

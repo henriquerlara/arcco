@@ -42,4 +42,44 @@ export const servicoArquivos = {
     }
     window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
   },
+  async baixar(id: string, nomeArquivo: string): Promise<void> {
+    const blob = await this.blob(id);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeArquivo;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  },
+  async compartilhar(id: string, nomeArquivo: string, titulo: string): Promise<'share' | 'download'> {
+    const blob = await this.blob(id);
+    const arquivo = new File([blob], nomeArquivo, { type: blob.type || 'application/pdf' });
+    const nav = navigator as Navigator & {
+      share?: (data: ShareData) => Promise<void>;
+      canShare?: (data: ShareData) => boolean;
+    };
+    if (typeof nav.share === 'function') {
+      const data: ShareData = { files: [arquivo], title: titulo, text: titulo };
+      if (!nav.canShare || nav.canShare(data)) {
+        try {
+          await nav.share(data);
+          return 'share';
+        } catch (e) {
+          if ((e as Error)?.name === 'AbortError') return 'share';
+        }
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeArquivo;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return 'download';
+  },
 };

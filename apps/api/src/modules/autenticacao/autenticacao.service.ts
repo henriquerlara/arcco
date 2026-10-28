@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import {
   configuracoesEmpresaPadrao,
+  lerPersonalizacaoComercial,
   PerfilUsuario,
   type CadastrarInput,
   type EntrarInput,
@@ -17,6 +18,7 @@ import { Erros } from '../../common/erros/erros';
 import { RateLimiterMemoria } from '../../common/utils/rate-limit';
 import type { UsuarioAutenticado } from '../../common/auth/tipos';
 import { templatePorSegmento } from '../empresas/templates-segmento';
+import { PermissoesService } from '../permissoes/permissoes.service';
 
 @Injectable()
 export class AutenticacaoService {
@@ -28,6 +30,7 @@ export class AutenticacaoService {
     private readonly platform: PlatformPrismaService,
     private readonly jwt: JwtService,
     private readonly senha: SenhaService,
+    private readonly permissoes: PermissoesService,
   ) {}
 
   async cadastrar(dto: CadastrarInput, ip: string, resposta: FastifyReply) {
@@ -115,10 +118,10 @@ export class AutenticacaoService {
     await this.emitir(resposta, usuario);
     this.limiterCadastrar.reiniciar(ip);
 
-    return {
+    return this.comPermissoes({
       usuario: this.serializarUsuario(usuario),
       empresa: this.serializarEmpresa(empresa),
-    };
+    });
   }
 
   async entrar(dto: EntrarInput, ip: string, resposta: FastifyReply) {
@@ -141,12 +144,12 @@ export class AutenticacaoService {
     });
 
     await this.emitir(resposta, usuario);
-    this.limiterEntrar.reiniciar(`${ip}:${email}`);
+    this.limiterEntrar.reiniciar(ip);
 
-    return {
+    return this.comPermissoes({
       usuario: this.serializarUsuario(usuario),
       empresa: this.serializarEmpresa(empresa),
-    };
+    });
   }
 
   async renovar(req: FastifyRequest, resposta: FastifyReply) {
@@ -180,10 +183,10 @@ export class AutenticacaoService {
       include: { empresa: true },
     });
     if (!registro) throw Erros.naoAutenticado();
-    return {
+    return this.comPermissoes({
       usuario: this.serializarUsuario(registro),
       empresa: this.serializarEmpresa(registro.empresa),
-    };
+    });
   }
 
   async trocarSenha(usuario: UsuarioAutenticado, dto: TrocarSenhaInput, resposta: FastifyReply) {
@@ -220,6 +223,13 @@ export class AutenticacaoService {
     });
   }
 
+  private comPermissoes<T extends { usuario: { id: string; empresaId: string; perfil: string } }>(corpo: T) {
+    return this.permissoes.chavesDaSessao(corpo.usuario).then((permissoesComerciais) => ({
+      ...corpo,
+      permissoesComerciais,
+    }));
+  }
+
   private serializarUsuario(u: {
     id: string;
     empresaId: string;
@@ -246,6 +256,7 @@ export class AutenticacaoService {
     id: string;
     nome: string;
     nomeFantasia: string | null;
+    ramo: string;
     segmento: string;
     telefone: string | null;
     cidade: string | null;
@@ -257,11 +268,13 @@ export class AutenticacaoService {
       id: e.id,
       nome: e.nome,
       nomeFantasia: e.nomeFantasia,
+      ramo: e.ramo,
       segmento: e.segmento,
       telefone: e.telefone,
       cidade: e.cidade,
       estado: e.estado,
       onboardingConcluido: configuracoes.onboardingConcluido ?? false,
+      personalizacaoComercial: lerPersonalizacaoComercial(e.configuracoes),
       configuracoes: e.configuracoes,
     };
   }

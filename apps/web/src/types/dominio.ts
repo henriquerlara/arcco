@@ -1,11 +1,13 @@
 import type {
   ConfiguracoesEmpresa,
+  PersonalizacaoComercial,
   DirecaoMensagem,
   EntidadeCampoPersonalizado,
   ModoAtendimento,
   PerfilUsuario,
   PrioridadeOportunidade,
   ProvedorWhatsApp,
+  RamoProduto,
   SegmentoEmpresa,
   StatusConexaoWhatsApp,
   StatusConversa,
@@ -32,18 +34,21 @@ export interface Usuario {
   perfil: PerfilUsuario;
   ativo: boolean;
   empresaId?: string;
-  /** Campo canônico da API. */
+  /** Campo canÃ´nico da API. */
   deveTrocarSenha?: boolean;
   /** Alias legado usado em views/store. */
   precisaTrocarSenha?: boolean;
   ultimoAcessoEm?: string | null;
   criadoEm?: string;
+  /** ECOL-26b: null = administrador (acesso total). */
+  permissoesConcedidas?: string[] | null;
 }
 
 export interface Empresa {
   id: string;
   nome: string;
   nomeFantasia?: string | null;
+  ramo?: RamoProduto;
   segmento: SegmentoEmpresa;
   telefone?: string | null;
   cidade?: string | null;
@@ -53,6 +58,8 @@ export interface Empresa {
   inscricaoEstadual?: string | null;
   enderecoFiscal?: EnderecoFiscal | null;
   onboardingConcluido?: boolean;
+  /** Definido pelo backend a partir do JSON da empresa. Ausente equivale a PADRAO. */
+  personalizacaoComercial?: PersonalizacaoComercial;
   configuracoes?: ConfiguracoesEmpresa;
 }
 
@@ -70,6 +77,32 @@ export interface Produto {
   ativo: boolean;
   critico?: boolean;
   zerado?: boolean;
+  codigoFornecedor?: string | null;
+  fornecedorId?: string | null;
+  /** ECOLUME (quando a flag estÃ¡ ativa) */
+  descricaoComercial?: string | null;
+  nomeFiscal?: string | null;
+  codigoInterno?: string | null;
+  ipi?: number | null;
+  margem?: number | null;
+  custoMedio?: number | null;
+  ultimoPreco?: number | null;
+  precoSugerido?: number | null;
+  fornecedor?: { id: string; nome: string; aliquotaSt?: number | null } | null;
+}
+
+export interface Fornecedor {
+  id: string;
+  nome: string;
+  nomeCurto?: string | null;
+  cnpj: string;
+  /** Presente sÃ³ com VER_CUSTOS. */
+  aliquotaSt?: number;
+  contatoNome?: string | null;
+  telefone?: string | null;
+  email?: string | null;
+  observacoes?: string | null;
+  ativo: boolean;
 }
 
 export interface MovimentacaoEstoque {
@@ -81,6 +114,7 @@ export interface MovimentacaoEstoque {
   orcamentoId?: string | null;
   oportunidadeId?: string | null;
   observacao?: string | null;
+  motivo?: string | null;
   usuarioId?: string | null;
   criadoEm: string;
 }
@@ -89,6 +123,56 @@ export interface ResumoEstoque {
   totalComControle: number;
   criticos: number;
   zerados: number;
+  /** ECOLUME */
+  produtosCadastrados?: number;
+  abaixoMinimo?: number;
+  aComprar?: number;
+  sobEncomenda?: number;
+}
+
+export interface ProdutoEstoqueEcolume extends Produto {
+  descricaoComercial?: string | null;
+  nomeFiscal?: string | null;
+  codigoInterno?: string | null;
+  ean?: string | null;
+  status: 'SOB_ENCOMENDA' | 'A_COMPRAR' | 'BAIXO' | 'OK';
+  fornecedor?: {
+    id: string;
+    nome: string;
+    nomeCurto?: string | null;
+    aliquotaSt?: number | null;
+  } | null;
+  custoMedio?: number | null;
+  ultimoPreco?: number | null;
+  precoSugerido?: number | null;
+  ipi?: number | null;
+  margem?: number | null;
+}
+
+export interface GrupoListaCompra {
+  fornecedorId: string | null;
+  fornecedorNome: string;
+  fornecedorCnpj: string | null;
+  totalFaltante: number;
+  itens: Array<{
+    produtoId: string;
+    descricaoComercial: string;
+    codigoInterno: string | null;
+    codigoFornecedor: string | null;
+    unidade: string;
+    saldo: number;
+    quantidadeFaltante: number;
+  }>;
+}
+
+export interface MovimentacaoEstoqueGlobal extends MovimentacaoEstoque {
+  produto?: {
+    id: string;
+    nome: string;
+    descricaoComercial?: string | null;
+    codigoInterno?: string | null;
+    unidade: string;
+  };
 }
 
 export interface NotaFiscal {
@@ -96,6 +180,8 @@ export interface NotaFiscal {
   empresaId: string;
   orcamentoId: string;
   oportunidadeId: string;
+  /** ECOL-24 */
+  pedidoId?: string | null;
   status: StatusNotaFiscal;
   chaveAcesso?: string | null;
   numero?: string | null;
@@ -103,6 +189,17 @@ export interface NotaFiscal {
   protocolo?: string | null;
   mensagemErro?: string | null;
   respostaFocus?: { _mock?: boolean } | null;
+  /** ECOL-28b — CC-e / e-mail (só nas rotas que incluem eventos). */
+  eventos?: Array<{
+    id: string;
+    tipo: string;
+    status: string;
+    numeroSequencia: number | null;
+    texto: string | null;
+    emails: string[];
+    mock: boolean;
+    criadoEm: string;
+  }>;
   idExternoFocus?: string | null;
   refFocus?: string | null;
   arquivoXmlId?: string | null;
@@ -111,6 +208,9 @@ export interface NotaFiscal {
   criadoEm: string;
   atualizadoEm?: string;
 }
+
+export type BaseCustoItemOrcamento = 'ULTIMO_PRECO' | 'CUSTO_MEDIO' | 'INFORMADO';
+export type TipoDescontoOrcamento = 'VALOR' | 'PERCENTUAL';
 
 export interface ItemOrcamento {
   id: string;
@@ -121,8 +221,17 @@ export interface ItemOrcamento {
   precoUnitario: number;
   desconto: number;
   totalLinha: number;
-  ordem: number;
+  ordem?: number;
   produto?: Produto | null;
+  /** ECOL-13 */
+  codigoInterno?: string | null;
+  baseCusto?: BaseCustoItemOrcamento | null;
+  custoBase?: number | null;
+  ipiPercentual?: number | null;
+  stPercentual?: number | null;
+  margem?: number | null;
+  precoManual?: boolean;
+  margemEfetiva?: number | null;
 }
 
 export interface AvisoEstoque {
@@ -141,6 +250,8 @@ export interface Orcamento {
   vigente: boolean;
   observacoes?: string | null;
   descontoValor: number;
+  descontoTipo?: TipoDescontoOrcamento;
+  descontoPercentual?: number | null;
   subtotal: number;
   total: number;
   validadeEm?: string | null;
@@ -148,6 +259,9 @@ export interface Orcamento {
   enviadoEm?: string | null;
   aceitoEm?: string | null;
   convertidoEm?: string | null;
+  /** ECOL-12 */
+  orcamentoOrigemId?: string | null;
+  orcamentoOrigem?: { id: string; numero: string } | null;
   itens: ItemOrcamento[];
   avisosEstoque?: AvisoEstoque[];
   criadoEm: string;
@@ -156,6 +270,27 @@ export interface Orcamento {
 export interface Sessao {
   usuario: Usuario;
   empresa: Empresa;
+  /** Lista resolvida no servidor. null significa empresa sem a personalizaÃ§Ã£o Ecolume. */
+  permissoesComerciais?: string[] | null;
+}
+
+export type NaturezaPessoa = 'PF' | 'PJ';
+
+export type TipoParceiro =
+  | 'ARQUITETO_DESIGNER'
+  | 'INSTALADOR_ELETRICISTA'
+  | 'CONSTRUTORA';
+
+export interface TelefoneExtraContato {
+  numero: string;
+  normalizado?: string | null;
+}
+
+export interface PessoaEmpresaContato {
+  nome: string;
+  cargo?: string | null;
+  telefone?: string | null;
+  email?: string | null;
 }
 
 export interface Contato {
@@ -171,6 +306,30 @@ export interface Contato {
   responsavelId?: string | null;
   responsavel?: Usuario | null;
   dadosPersonalizados?: Record<string, unknown>;
+  /** ECOLUME */
+  natureza?: NaturezaPessoa | null;
+  nomeFantasia?: string | null;
+  inscricaoEstadual?: string | null;
+  ieIsento?: boolean;
+  cep?: string | null;
+  logradouro?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  uf?: string | null;
+  telefonesExtras?: TelefoneExtraContato[];
+  pessoasEmpresa?: PessoaEmpresaContato[];
+  ehParceiro?: boolean;
+  tipoParceiro?: TipoParceiro | null;
+  rtPadrao?: number | null;
+  chavePix?: string | null;
+  banco?: string | null;
+  agencia?: string | null;
+  conta?: string | null;
+  titularNome?: string | null;
+  titularDocumento?: string | null;
+  observacoesParceria?: string | null;
   totalOportunidades?: number;
   totalObras?: number;
   oportunidades?: Array<{
@@ -185,8 +344,104 @@ export interface Contato {
     papel: string;
     obra: Obra;
   }>;
+  /** ECOL-09b — ficha do cliente (ECOLUME). Campos financeiros podem vir ausentes sem permissão. */
+  fichaCliente?: FichaCliente;
+  /** ECOL-10b — parceiro (ECOLUME + VER_COMISSOES). */
+  extratoComissoes?: ExtratoComissaoLinha[];
+  negociosAbertos?: NegocioAbertoParceiro[];
+  /** ECOL-10b — métricas na listagem de parceiros. */
+  vendasIndicadas?: number;
+  quantidadePedidos?: number;
+  valorVendido?: number;
+  comissaoAPagar?: number;
+  comissaoPaga?: number;
   criadoEm?: string;
   atualizadoEm?: string;
+}
+
+export interface FichaCliente {
+  resumo: {
+    totalComprado?: number;
+    quantidadePedidos?: number;
+    ultimaCompraEm?: string | null;
+    parceiroOrigem: { id: string; nome: string } | null;
+  };
+  historico: FichaNegocio[];
+  anexos: FichaAnexo[];
+}
+
+export interface FichaNegocio {
+  id: string;
+  codigo: string;
+  titulo: string;
+  criadoEm: string;
+  atualizadoEm: string;
+  valorEstimado: number | null;
+  etapa: { nome: string; chaveSistema: string | null };
+  parceiro: { id: string; nome: string; ehParceiro: boolean } | null;
+  orcamentos: Array<{
+    id: string;
+    numero: string;
+    status: string;
+    total: number;
+    criadoEm: string;
+  }>;
+  pedidos: Array<{
+    id: string;
+    numero: string;
+    status: string;
+    total: number;
+    criadoEm: string;
+    finalizadoEm: string | null;
+    checklist: Array<{ tipo: string; concluido: boolean; aplicavel: boolean }>;
+  }>;
+}
+
+export interface FichaAnexo {
+  id: string;
+  nome: string;
+  criadoEm: string;
+  oportunidadeId: string;
+  negocioCodigo: string | null;
+  negocioTitulo: string | null;
+}
+
+export interface ExtratoComissaoLinha {
+  pedidoId: string;
+  pedidoNumero: string;
+  clienteNome: string;
+  data: string;
+  valorVenda: number;
+  rtPercentual: number;
+  valorComissao: number;
+  status: 'A_PAGAR' | 'PAGA' | 'CANCELADA';
+}
+
+export interface NegocioAbertoParceiro {
+  id: string;
+  codigo: string;
+  titulo: string;
+  clienteNome: string;
+  etapa: string;
+  criadoEm: string;
+}
+
+export interface ComissaoParceiroLinha {
+  id: string;
+  pedidoId: string;
+  pedidoNumero: string;
+  oportunidadeId: string;
+  negocioCodigo: string;
+  negocioTitulo: string;
+  parceiroId: string;
+  parceiroNome: string | null;
+  clienteNome: string;
+  data: string;
+  valorVenda: number;
+  rtPercentual?: number;
+  valorComissao?: number;
+  status: 'A_PAGAR' | 'PAGA' | 'CANCELADA';
+  pagoEm: string | null;
 }
 
 export interface Obra {
@@ -233,6 +488,18 @@ export interface EtapaFunil {
   valorTotal?: number;
 }
 
+export type OrigemNegocio = 'CLIENTE_DIRETO' | 'VIA_PARCEIRO';
+
+export interface AnexoOportunidade {
+  id: string;
+  nome: string;
+  tipoMime: string;
+  tamanho: number;
+  criadoEm: string;
+  enviadoPorId?: string | null;
+  autor?: { id: string; nome: string } | null;
+}
+
 export interface Oportunidade {
   id: string;
   codigo: string;
@@ -257,6 +524,19 @@ export interface Oportunidade {
   codigoOrcamento?: string | null;
   motivoPerda?: string | null;
   dadosPersonalizados?: Record<string, unknown>;
+  /** ECOL-11 */
+  origemNegocio?: OrigemNegocio | null;
+  parceiroId?: string | null;
+  parceiro?: Contato | null;
+  rtNegocio?: number | null;
+  obraCep?: string | null;
+  obraLogradouro?: string | null;
+  obraNumero?: string | null;
+  obraComplemento?: string | null;
+  obraBairro?: string | null;
+  obraCidade?: string | null;
+  obraUf?: string | null;
+  anexos?: AnexoOportunidade[];
   atividades?: Atividade[];
   historicoEtapas?: HistoricoEtapaOportunidade[];
   eventos?: EventoOportunidade[];
@@ -301,6 +581,8 @@ export interface Atividade {
   vencimento: string;
   concluida: boolean;
   concluidaEm?: string | null;
+  concluidaPorId?: string | null;
+  resultadoConclusao?: string | null;
   responsavelId?: string | null;
   responsavel?: Usuario | null;
   oportunidadeId?: string | null;
@@ -309,6 +591,28 @@ export interface Atividade {
   contato?: Contato | null;
   obraId?: string | null;
   obra?: Obra | null;
+  pedidoId?: string | null;
+  pedido?: { id: string; numero: string; status: string; oportunidadeId: string } | null;
+  diaInteiro?: boolean;
+  periodoDia?: string | null;
+  local?: string | null;
+  entregaCep?: string | null;
+  entregaLogradouro?: string | null;
+  entregaNumero?: string | null;
+  entregaComplemento?: string | null;
+  entregaBairro?: string | null;
+  entregaCidade?: string | null;
+  entregaUf?: string | null;
+  contatoLocalNome?: string | null;
+  contatoLocalTelefone?: string | null;
+  conclusaoEntrega?: string | null;
+  itensConferencia?: Array<{
+    id: string;
+    descricaoComercial: string;
+    nomeFiscal: string;
+    quantidade: number;
+    unidade: string;
+  }>;
   criadoEm?: string;
 }
 
@@ -414,8 +718,12 @@ export interface MetricasDashboard {
 export interface PontoFunil {
   etapa: string;
   total: number;
-  valor: number;
+  valor?: number;
   tipo?: TipoEtapaFunil;
+  /** ECOL-23 â€” NEGOCIO (prÃ©) ou PEDIDO (pÃ³s). */
+  tipoCard?: 'NEGOCIO' | 'PEDIDO';
+  chave?: string;
+  link?: string;
 }
 
 export interface AlertaDashboard {

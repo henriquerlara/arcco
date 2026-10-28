@@ -1,4 +1,5 @@
 @import './tokens.css';
+@import './clinica.css';
 
 /* Fontes locais via @fontsource */
 @import '@fontsource/manrope/400.css';

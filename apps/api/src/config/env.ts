@@ -7,6 +7,9 @@ const envSchema = z.object({
   EMPRESA_DATABASE_URL: z
     .string()
     .default('postgresql://arcco:arcco@localhost:5432/db_empresa_arcco'),
+  SAUDE_DATABASE_URL: z
+    .string()
+    .default('postgresql://arcco:arcco@localhost:5432/db_clinica_arcco'),
 
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().default(3000),

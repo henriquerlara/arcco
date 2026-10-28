@@ -3,6 +3,7 @@ import { computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { Menu } from 'lucide-vue-next';
 import BarraLateral from '@/components/layout/BarraLateral.vue';
+import SinoAgenda from '@/components/layout/SinoAgenda.vue';
 import MarcaArcco from '@/components/marca/MarcaArcco.vue';
 import { useInterfaceStore } from '@/stores/interface';
 
@@ -51,6 +52,15 @@ watch(
           <Menu class="size-5" />
         </button>
         <MarcaArcco tema="escuro" tamanho="sm" />
+        <div class="ml-auto">
+          <SinoAgenda />
+        </div>
+      </div>
+
+      <div
+        class="hidden h-14 items-center justify-end border-b border-borda/60 bg-branco/80 px-8 backdrop-blur md:flex xl:px-10"
+      >
+        <SinoAgenda />
       </div>
 
       <main

@@ -1,0 +1,3 @@
+CREATE TYPE "RamoProduto" AS ENUM ('CONSTRUCAO', 'SAUDE');
+
+ALTER TABLE "empresas" ADD COLUMN "ramo" "RamoProduto" NOT NULL DEFAULT 'CONSTRUCAO';

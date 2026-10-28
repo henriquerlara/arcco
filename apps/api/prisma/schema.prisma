@@ -23,6 +23,25 @@ enum TipoContato {
   OUTRO
 }
 
+/// ECOL-09a: PF/PJ. Nulo nos contatos legados e em empresas sem a flag.
+enum NaturezaPessoa {
+  PF
+  PJ
+}
+
+/// ECOL-10a: tipo de parceria. Nulo se não for parceiro / legado.
+enum TipoParceiro {
+  ARQUITETO_DESIGNER
+  INSTALADOR_ELETRICISTA
+  CONSTRUTORA
+}
+
+/// ECOL-11: origem do negócio (só ECOLUME). Nulo no legado OP-.
+enum OrigemNegocio {
+  CLIENTE_DIRETO
+  VIA_PARCEIRO
+}
+
 enum StatusObra {
   PLANEJAMENTO
   EM_ANDAMENTO
@@ -59,6 +78,8 @@ enum TipoAtividade {
   REVISAR_ORCAMENTO
   FOLLOW_UP
   TAREFA
+  ENTREGA
+  VISITA
 }
 
 enum ProvedorWhatsApp {
@@ -134,6 +155,10 @@ enum StatusOrcamento {
   ACEITO
   CANCELADO
   CONVERTIDO
+  /// ECOL-12 — orçamento enviado substituído por outro no mesmo negócio.
+  SUBSTITUIDO
+  /// ECOL-12 — recusado; somente leitura.
+  RECUSADO
 }
 
 enum StatusNotaFiscal {
@@ -142,6 +167,50 @@ enum StatusNotaFiscal {
   AUTORIZADA
   REJEITADA
   CANCELADA
+}
+
+/// ECOL-16 — ciclo do pedido. Pagamentos/checklist/baixa entram na ECOL-17.
+enum StatusPedido {
+  CONFIRMADO
+  FINALIZADO
+  CANCELADO
+}
+
+/// ECOL-19 � coluna p�s-venda do pedido (CANCELADO/FINALIZADO usam StatusPedido).
+enum FaseKanbanPedido {
+  PEDIDO_CONFIRMADO
+  EM_SEPARACAO
+  PRONTO_ENTREGA
+  ENTREGUE
+}
+
+enum ModeloPagamentoPedido {
+  PIX_AVISTA
+  CARTAO_CREDITO
+  CARTAO_DEBITO
+  SINAL_RESTANTE_ENTREGA
+  SINAL_BOLETOS
+  PERSONALIZADO
+}
+
+enum StatusPagamentoPedido {
+  PREVISTO
+  RECEBIDO
+}
+
+enum StatusComissaoPedido {
+  A_PAGAR
+  PAGA
+  CANCELADA
+}
+
+enum TipoChecklistPedido {
+  PAGAMENTO_RECEBIDO
+  ITENS_COMPRADOS
+  MATERIAL_SEPARADO
+  NF_EMITIDA
+  ENTREGUE
+  COMISSAO_PAGA
 }
 
 enum TipoMovimentacaoEstoque {
@@ -167,17 +236,51 @@ model Contato {
   observacoes         String?
   responsavelId       String?
   dadosPersonalizados Json        @default("{}")
+  /// ECOL-09a — nulo fora da flag / cadastros antigos.
+  natureza            NaturezaPessoa?
+  nomeFantasia        String?
+  inscricaoEstadual   String?
+  ieIsento            Boolean     @default(false)
+  cep                 String?
+  logradouro          String?
+  numero              String?
+  complemento         String?
+  bairro              String?
+  cidade              String?
+  uf                  String?
+  /// Telefones adicionais: [{ numero, normalizado }].
+  telefonesExtras     Json        @default("[]")
+  /// Contatos da PJ: [{ nome, cargo, telefone, email }].
+  pessoasEmpresa      Json        @default("[]")
+  /// Etiqueta de parceria (ECOL-09a/10a).
+  ehParceiro          Boolean     @default(false)
+  /// ECOL-10a — preenchidos com ehParceiro; preservados ao desmarcar.
+  tipoParceiro        TipoParceiro?
+  /// Percentual RT do parceiro (ex.: 10.50).
+  rtPadrao            Decimal?    @db.Decimal(7, 4)
+  chavePix            String?
+  banco               String?
+  agencia             String?
+  conta               String?
+  titularNome         String?
+  titularDocumento    String?
+  observacoesParceria String?
   criadoEm            DateTime    @default(now())
   atualizadoEm        DateTime    @updatedAt
 
-  oportunidades Oportunidade[]
-  atividades    Atividade[]
-  contatosObras ContatoObra[]
-  conversas     Conversa[]
+  oportunidades        Oportunidade[] @relation("ClienteOportunidade")
+  negociosComoParceiro Oportunidade[] @relation("ParceiroOportunidade")
+  atividades           Atividade[]
+  contatosObras        ContatoObra[]
+  conversas            Conversa[]
 
   @@unique([empresaId, telefoneNormalizado])
   @@index([empresaId])
   @@index([empresaId, nome])
+  @@index([empresaId, documento])
+  @@index([empresaId, natureza])
+  @@index([empresaId, cidade])
+  @@index([empresaId, ehParceiro])
   @@index([responsavelId])
   @@map("contatos")
 }
@@ -283,11 +386,23 @@ model Oportunidade {
   codigoOrcamento     String?
   motivoPerda         String?
   dadosPersonalizados Json                   @default("{}")
+  /// ECOL-11 — nulos no legado / sem flag.
+  origemNegocio       OrigemNegocio?
+  parceiroId          String?
+  rtNegocio           Decimal?               @db.Decimal(7, 4)
+  obraCep             String?
+  obraLogradouro      String?
+  obraNumero          String?
+  obraComplemento     String?
+  obraBairro          String?
+  obraCidade          String?
+  obraUf              String?
   fechadaEm           DateTime?
   criadoEm            DateTime               @default(now())
   atualizadoEm        DateTime               @updatedAt
 
-  contato    Contato    @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  contato    Contato    @relation("ClienteOportunidade", fields: [contatoId], references: [id], onDelete: Cascade)
+  parceiro   Contato?   @relation("ParceiroOportunidade", fields: [parceiroId], references: [id], onDelete: SetNull)
   obra       Obra?      @relation(fields: [obraId], references: [id])
   categoria  Categoria? @relation(fields: [categoriaId], references: [id])
   etapa           EtapaFunil                   @relation(fields: [etapaId], references: [id])
@@ -295,6 +410,7 @@ model Oportunidade {
   historicoEtapas HistoricoEtapaOportunidade[]
   eventos         EventoOportunidade[]
   orcamentos      Orcamento[]
+  pedidos         Pedido[]
   notasFiscais    NotaFiscal[]
 
   @@unique([empresaId, codigo])
@@ -302,6 +418,8 @@ model Oportunidade {
   @@index([empresaId, etapaId])
   @@index([empresaId, responsavelId])
   @@index([contatoId])
+  @@index([parceiroId])
+  @@index([empresaId, origemNegocio])
   @@map("oportunidades")
 }
 
@@ -350,24 +468,47 @@ model Atividade {
   oportunidadeId String?
   contatoId      String?
   obraId         String?
+  /// ECOL-20 � v�nculo opcional a pedido (obrigat�rio se tipo ENTREGA).
+  pedidoId       String?
   responsavelId  String
   tipo           TipoAtividade
   titulo         String
   descricao      String?
   vencimento     DateTime
+  /// ECOL-20 � compromisso de dia inteiro (sem hor�rio).
+  diaInteiro     Boolean       @default(false)
+  /// ECOL-20 � MANHA | TARDE quando sem hor�rio exato.
+  periodoDia     String?
+  local          String?
+  entregaCep           String?
+  entregaLogradouro    String?
+  entregaNumero        String?
+  entregaComplemento   String?
+  entregaBairro        String?
+  entregaCidade        String?
+  entregaUf            String?
+  contatoLocalNome     String?
+  contatoLocalTelefone String?
+  /// PARCIAL | FINAL ap�s conclus�o de entrega.
+  conclusaoEntrega String?
+  resultadoConclusao String?
   concluida      Boolean       @default(false)
   concluidaEm    DateTime?
+  concluidaPorId String?
   criadoEm       DateTime      @default(now())
   atualizadoEm   DateTime      @updatedAt
 
   oportunidade Oportunidade? @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
   contato      Contato?      @relation(fields: [contatoId], references: [id], onDelete: Cascade)
   obra         Obra?         @relation(fields: [obraId], references: [id], onDelete: Cascade)
+  pedido       Pedido?       @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
 
   @@index([empresaId])
   @@index([empresaId, responsavelId])
   @@index([empresaId, concluida, vencimento])
   @@index([oportunidadeId])
+  @@index([pedidoId])
+  @@index([empresaId, tipo, concluida, vencimento])
   @@map("atividades")
 }
 
@@ -496,6 +637,82 @@ model CampoPersonalizado {
   @@map("campos_personalizados")
 }
 
+model Fornecedor {
+  id           String   @id @default(uuid())
+  empresaId    String
+  nome         String
+  nomeCurto    String?
+  cnpj         String
+  /// ST% (0–100). Obrigatório; zero permitido. Resposta sujeita a VER_CUSTOS.
+  aliquotaSt   Decimal  @db.Decimal(7, 4)
+  contatoNome  String?
+  telefone     String?
+  email        String?
+  observacoes  String?
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  produtos     Produto[]
+  notasEntrada NotaEntrada[]
+
+  @@unique([empresaId, cnpj])
+  @@index([empresaId, ativo])
+  @@map("fornecedores")
+}
+
+/// NF-e de compra importada (ECOL-07). Chave única por empresa.
+model NotaEntrada {
+  id            String   @id @default(uuid())
+  empresaId     String
+  fornecedorId  String
+  chaveAcesso   String
+  numero        String?
+  serie         String?
+  emitidoEm     DateTime?
+  valorTotal    Decimal  @db.Decimal(18, 4)
+  arquivoXmlId  String?
+  status        String   @default("CONFERIDA")
+  criadoPorId   String?
+  criadoEm      DateTime @default(now())
+  atualizadoEm  DateTime @updatedAt
+
+  fornecedor Fornecedor        @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+  itens      ItemNotaEntrada[]
+
+  @@unique([empresaId, chaveAcesso])
+  @@index([empresaId, criadoEm])
+  @@index([fornecedorId])
+  @@map("notas_entrada")
+}
+
+model ItemNotaEntrada {
+  id               String  @id @default(uuid())
+  empresaId        String
+  notaEntradaId    String
+  /// Nulo enquanto a nota está PENDENTE e o item ainda não foi decidido/vinculado.
+  produtoId        String?
+  numeroItem       Int
+  codigoFornecedor String?
+  descricao        String?
+  quantidade       Float
+  unidade          String  @default("UN")
+  valorUnitario    Decimal @db.Decimal(18, 4)
+  valorTotal       Decimal @db.Decimal(18, 4)
+  ipi              Float?
+  ncm              String?
+  cest             String?
+  origemFiscal     String?
+  controlaEstoque  Boolean @default(true)
+
+  nota    NotaEntrada @relation(fields: [notaEntradaId], references: [id], onDelete: Cascade)
+  produto Produto?    @relation(fields: [produtoId], references: [id], onDelete: Restrict)
+
+  @@index([notaEntradaId])
+  @@index([empresaId, produtoId])
+  @@map("itens_nota_entrada")
+}
+
 model Produto {
   id              String   @id @default(uuid())
   empresaId       String
@@ -510,53 +727,130 @@ model Produto {
   estoqueMinimo   Float    @default(0)
   controlaEstoque Boolean  @default(true)
   ativo           Boolean  @default(true)
+  /// Identidade estável por empresa. Nulo até a geração da personalização. Não é o SKU.
+  codigoInterno   String?
+  nomeFiscal      String?
+  descricaoComercial String?
+  /// Código do item no catálogo do fornecedor (texto). Permanece além do vínculo opcional.
+  codigoFornecedor String?
+  /// Preparação ECOL-07. Nulo nos produtos atuais; não obrigatório.
+  fornecedorId    String?
+  ean             String?
+  cest            String?
+  origemFiscal    String?
+  /// IPI e margem: estrutura da ECOL-04a. Sem fórmula nesta tarefa.
+  ipi             Float?
+  margem          Float?
+  /// Custo médio e último preço: DECIMAL(18,4) — quatro casas internas (ECOL-05 / 7.7).
+  custoMedio      Decimal? @db.Decimal(18, 4)
+  ultimoPreco     Decimal? @db.Decimal(18, 4)
+  /// Reservado à P5. Não entra em conta.
+  fatorConversao  Float?
   criadoEm        DateTime @default(now())
   atualizadoEm    DateTime @updatedAt
 
-  itensOrcamento ItemOrcamento[]
-  movimentacoes  MovimentacaoEstoque[]
+  fornecedor       Fornecedor?       @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
+  itensOrcamento   ItemOrcamento[]
+  itensPedido      ItemPedido[]
+  movimentacoes    MovimentacaoEstoque[]
+  itensNotaEntrada ItemNotaEntrada[]
 
   @@index([empresaId])
   @@index([empresaId, ativo])
+  @@index([fornecedorId])
   @@unique([empresaId, sku])
+  @@unique([empresaId, codigoInterno])
   @@map("produtos")
 }
 
 model Orcamento {
-  id             String          @id @default(uuid())
-  empresaId      String
-  oportunidadeId String
-  numero         String
-  versao         Int             @default(1)
-  status         StatusOrcamento @default(RASCUNHO)
-  vigente        Boolean         @default(false)
-  observacoes    String?
-  descontoValor  Float           @default(0)
-  subtotal       Float           @default(0)
-  total          Float           @default(0)
-  validadeEm     DateTime?
-  arquivoId      String?
-  enviadoEm      DateTime?
-  aceitoEm       DateTime?
-  convertidoEm   DateTime?
-  criadoPorId    String?
-  criadoEm       DateTime        @default(now())
-  atualizadoEm   DateTime        @updatedAt
+  id                String          @id @default(uuid())
+  empresaId         String
+  oportunidadeId    String
+  numero            String
+  versao            Int             @default(1)
+  status            StatusOrcamento @default(RASCUNHO)
+  vigente           Boolean         @default(false)
+  observacoes       String?
+  descontoValor     Float           @default(0)
+  /// ECOL-13 — desconto geral em R$ ou % (sem dupla aplicação).
+  descontoTipo      TipoDescontoOrcamento @default(VALOR)
+  descontoPercentual Float?
+  subtotal          Float           @default(0)
+  total             Float           @default(0)
+  validadeEm        DateTime?
+  arquivoId         String?
+  enviadoEm         DateTime?
+  aceitoEm          DateTime?
+  convertidoEm      DateTime?
+  criadoPorId       String?
+  /// ECOL-12 — orçamento de origem da duplicação (“Baseado em”).
+  orcamentoOrigemId String?
+  criadoEm          DateTime        @default(now())
+  atualizadoEm      DateTime        @updatedAt
 
-  oportunidade Oportunidade    @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
-  itens        ItemOrcamento[]
-  notasFiscais NotaFiscal[]
+  oportunidade    Oportunidade    @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+  orcamentoOrigem Orcamento?      @relation("OrcamentoBaseadoEm", fields: [orcamentoOrigemId], references: [id], onDelete: SetNull)
+  derivados       Orcamento[]     @relation("OrcamentoBaseadoEm")
+  itens           ItemOrcamento[]
+  /// ECOL-16 — no máximo um pedido por orçamento (unique em Pedido.orcamentoId).
+  pedido          Pedido?
+  notasFiscais    NotaFiscal[]
 
   @@unique([empresaId, numero])
   @@index([empresaId])
   @@index([oportunidadeId, versao])
   @@index([oportunidadeId, vigente])
+  @@index([orcamentoOrigemId])
   @@map("orcamentos")
 }
 
-model ItemOrcamento {
+/// ECOL-16 — pedido comercial. Conversão operacional completa (estoque, pagamentos,
+/// comissão, checklist, status CONVERTIDO do orçamento) fica na ECOL-17.
+model Pedido {
+  id                 String               @id @default(uuid())
+  empresaId          String
+  oportunidadeId     String
+  orcamentoId        String               @unique
+  numero             String
+  status             StatusPedido         @default(CONFIRMADO)
+  observacoes        String?
+  descontoValor      Float                @default(0)
+  descontoTipo       TipoDescontoOrcamento @default(VALOR)
+  descontoPercentual Float?
+  subtotal           Float                @default(0)
+  total              Float                @default(0)
+  criadoPorId        String?
+  canceladoEm        DateTime?
+  canceladoPorId     String?
+  motivoCancelamento String?
+  /// ECOL-19 � coluna Kanban enquanto CONFIRMADO.
+  faseKanban         FaseKanbanPedido      @default(PEDIDO_CONFIRMADO)
+  finalizadoEm       DateTime?
+  criadoEm           DateTime             @default(now())
+  atualizadoEm       DateTime             @updatedAt
+
+  oportunidade Oportunidade @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+  orcamento    Orcamento    @relation(fields: [orcamentoId], references: [id], onDelete: Restrict)
+  itens        ItemPedido[]
+  pagamentos   PagamentoPedido[]
+  comissao     ComissaoPedido?
+  checklist    ChecklistItemPedido[]
+  itensSeparacao ItemSeparacaoPedido[]
+  itensCompra    ItemCompraPedido[]
+  historicoFases HistoricoFasePedido[]
+  atividades     Atividade[]
+  notasFiscais   NotaFiscal[]
+
+  @@unique([empresaId, numero])
+  @@index([empresaId])
+  @@index([oportunidadeId])
+  @@map("pedidos")
+}
+
+model ItemPedido {
   id            String  @id @default(uuid())
-  orcamentoId   String
+  pedidoId      String
   produtoId     String?
   nome          String
   unidade       String  @default("un")
@@ -565,6 +859,165 @@ model ItemOrcamento {
   desconto      Float   @default(0)
   totalLinha    Float
   ordem         Int     @default(0)
+  codigoInterno String?
+
+  pedido  Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  produto Produto? @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+  itensNota ItemNotaFiscal[]
+
+  @@index([pedidoId])
+  @@index([produtoId])
+  @@map("itens_pedido")
+}
+
+/// ECOL-19 � movimento manual/autom�tico do card de pedido.
+model HistoricoFasePedido {
+  id           String   @id @default(uuid())
+  empresaId    String
+  pedidoId     String
+  faseAnterior String?
+  faseNova     String
+  origem       String
+  usuarioId    String?
+  motivo       String?
+  criadoEm     DateTime @default(now())
+
+  pedido Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId])
+  @@index([pedidoId])
+  @@map("historico_fase_pedido")
+}
+
+/// ECOL-17 — linha de pagamento do pedido (§11.4).
+model PagamentoPedido {
+  id           String                @id @default(uuid())
+  empresaId    String
+  pedidoId     String
+  modelo       ModeloPagamentoPedido
+  forma        String
+  valor        Decimal               @db.Decimal(18, 4)
+  vencimentoEm DateTime?
+  status       StatusPagamentoPedido @default(PREVISTO)
+  recebidoEm   DateTime?
+  ordem        Int                   @default(0)
+  criadoEm     DateTime              @default(now())
+  atualizadoEm DateTime              @updatedAt
+
+  pedido Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId])
+  @@index([pedidoId])
+  @@map("pagamentos_pedido")
+}
+
+/// ECOL-17 — comissão do parceiro (§9.3). Base padrão = total do pedido (P1 / 16.4).
+model ComissaoPedido {
+  id            String              @id @default(uuid())
+  empresaId     String
+  pedidoId      String              @unique
+  parceiroId    String
+  rtPercentual  Decimal             @db.Decimal(7, 4)
+  baseCalculo   Decimal             @db.Decimal(18, 4)
+  valorComissao Decimal             @db.Decimal(18, 4)
+  status        StatusComissaoPedido @default(A_PAGAR)
+  pagoEm        DateTime?
+  formaPagamento String?
+  criadoEm      DateTime            @default(now())
+  atualizadoEm  DateTime            @updatedAt
+
+  pedido Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId])
+  @@index([parceiroId])
+  @@map("comissoes_pedido")
+}
+
+model ChecklistItemPedido {
+  id          String              @id @default(uuid())
+  empresaId   String
+  pedidoId    String
+  tipo        TipoChecklistPedido
+  rotulo      String
+  /// Se false, não entra no critério de 100% (ex.: NF futura, comissão sem parceiro).
+  aplicavel   Boolean             @default(true)
+  /// Manual vs ganchos futuros (NF/Agenda/comissão).
+  automatico  Boolean             @default(false)
+  concluido   Boolean             @default(false)
+  concluidoEm DateTime?
+  usuarioId   String?
+  ordem       Int                 @default(0)
+  criadoEm    DateTime            @default(now())
+  atualizadoEm DateTime           @updatedAt
+
+  pedido Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@unique([pedidoId, tipo])
+  @@index([empresaId])
+  @@index([pedidoId])
+  @@map("checklist_itens_pedido")
+}
+
+model ItemSeparacaoPedido {
+  id         String @id @default(uuid())
+  pedidoId   String
+  produtoId  String
+  nome       String
+  quantidade Float
+  ordem      Int    @default(0)
+
+  pedido Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@index([pedidoId])
+  @@map("itens_separacao_pedido")
+}
+
+model ItemCompraPedido {
+  id              String @id @default(uuid())
+  pedidoId        String
+  produtoId       String
+  nome            String
+  quantidadeFalta Float
+  ordem           Int    @default(0)
+
+  pedido Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@index([pedidoId])
+  @@map("itens_compra_pedido")
+}
+
+/// ECOL-13 — origem do custoBase na linha (snapshot; não segue alteração do produto).
+enum BaseCustoItemOrcamento {
+  ULTIMO_PRECO
+  CUSTO_MEDIO
+  INFORMADO
+}
+
+enum TipoDescontoOrcamento {
+  VALOR
+  PERCENTUAL
+}
+
+model ItemOrcamento {
+  id             String                 @id @default(uuid())
+  orcamentoId    String
+  produtoId      String?
+  nome           String
+  unidade        String                 @default("un")
+  quantidade     Float
+  precoUnitario  Float
+  desconto       Float                  @default(0)
+  totalLinha     Float
+  ordem          Int                    @default(0)
+  /// ECOL-13 — snapshot da linha (não altera o produto).
+  codigoInterno  String?
+  baseCusto      BaseCustoItemOrcamento?
+  custoBase      Decimal?               @db.Decimal(18, 4)
+  ipiPercentual  Decimal?               @db.Decimal(7, 4)
+  stPercentual   Decimal?               @db.Decimal(7, 4)
+  margem         Decimal?               @db.Decimal(18, 4)
+  precoManual    Boolean                @default(false)
+  margemEfetiva  Decimal?               @db.Decimal(18, 4)
 
   orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
   produto   Produto?  @relation(fields: [produtoId], references: [id], onDelete: SetNull)
@@ -583,8 +1036,13 @@ model MovimentacaoEstoque {
   saldoApos      Float
   orcamentoId    String?
   oportunidadeId String?
+  /// ECOL-17 � origem da baixa pelo pedido.
+  pedidoId       String?
   observacao     String?
   usuarioId      String?
+  /// Preenchidos pelas tarefas de ajuste e custo. Nulos no histórico já gravado.
+  motivo         String?
+  precoUnitarioCusto Decimal? @db.Decimal(18, 4)
   criadoEm       DateTime                @default(now())
 
   produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
@@ -592,6 +1050,7 @@ model MovimentacaoEstoque {
   @@index([empresaId, criadoEm])
   @@index([produtoId, criadoEm])
   @@index([orcamentoId])
+  @@index([pedidoId])
   @@map("movimentacoes_estoque")
 }
 
@@ -600,6 +1059,8 @@ model NotaFiscal {
   empresaId       String
   orcamentoId     String
   oportunidadeId  String
+  /// ECOL-24 — vínculo ao pedido (emissão Ecolume). Legado pode ficar nulo.
+  pedidoId        String?
   status          StatusNotaFiscal @default(RASCUNHO)
   chaveAcesso     String?
   numero          String?
@@ -619,11 +1080,84 @@ model NotaFiscal {
 
   orcamento    Orcamento    @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
   oportunidade Oportunidade @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+  pedido       Pedido?      @relation(fields: [pedidoId], references: [id], onDelete: SetNull)
+  itens        ItemNotaFiscal[]
+  eventos      EventoNotaFiscal[]
 
   @@index([empresaId])
   @@index([orcamentoId])
   @@index([oportunidadeId])
+  @@index([pedidoId])
   @@index([empresaId, status])
   @@unique([empresaId, refFocus])
   @@map("notas_fiscais")
+}
+
+/// ECOL-28b — evento fiscal da NF-e: CC-e (CCE) ou envio de e-mail DANFE/XML (EMAIL).
+model EventoNotaFiscal {
+  id              String   @id @default(uuid())
+  empresaId       String
+  notaFiscalId    String
+  /// CCE | EMAIL
+  tipo            String
+  /// AUTORIZADO | REJEITADO | AGENDADO | ERRO
+  status          String
+  numeroSequencia Int?
+  texto           String?
+  emails          String[] @default([])
+  protocolo       String?
+  respostaFocus   Json?
+  mock            Boolean  @default(false)
+  criadoPorId     String?
+  criadoEm        DateTime @default(now())
+
+  nota NotaFiscal @relation(fields: [notaFiscalId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId, notaFiscalId])
+  @@map("eventos_nota_fiscal")
+}
+
+/// ECOL-24 — linha faturada (snapshot); quantidade controla parcial/total.
+model ItemNotaFiscal {
+  id            String  @id @default(uuid())
+  empresaId     String
+  notaFiscalId  String
+  itemPedidoId  String?
+  produtoId     String?
+  codigoInterno String?
+  descricao     String
+  ncm           String?
+  cest          String?
+  origemFiscal  String?
+  unidade       String  @default("UN")
+  quantidade    Decimal @db.Decimal(18, 4)
+  precoUnitario Decimal @db.Decimal(18, 4)
+  valorTotal    Decimal @db.Decimal(18, 4)
+  ordem         Int     @default(0)
+
+  nota       NotaFiscal @relation(fields: [notaFiscalId], references: [id], onDelete: Cascade)
+  itemPedido ItemPedido? @relation(fields: [itemPedidoId], references: [id], onDelete: SetNull)
+
+  @@index([notaFiscalId])
+  @@index([itemPedidoId])
+  @@index([empresaId])
+  @@map("itens_nota_fiscal")
+}
+
+/// Trilha da seção 16.3. Sem atualizadoEm: o registro não é editável pela aplicação.
+model LogAuditoria {
+  id         String   @id @default(uuid())
+  empresaId  String
+  usuarioId  String?
+  tipo       String
+  entidade   String
+  entidadeId String
+  anterior   Json?
+  posterior  Json?
+  criadoEm   DateTime @default(now())
+
+  @@index([empresaId, criadoEm])
+  @@index([empresaId, usuarioId])
+  @@index([empresaId, tipo, criadoEm])
+  @@map("logs_auditoria")
 }

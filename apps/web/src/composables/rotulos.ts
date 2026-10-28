@@ -46,6 +46,17 @@ export const ROTULO_TIPO_ATIVIDADE: Record<TipoAtividade, string> = {
   REVISAR_ORCAMENTO: 'Revisar orçamento',
   FOLLOW_UP: 'Follow-up',
   TAREFA: 'Tarefa',
+  ENTREGA: 'Entrega',
+  VISITA: 'Visita',
+};
+
+/** Tipos da Agenda ECOLUME (§13.1). */
+export const ROTULO_TIPO_ATIVIDADE_ECOLUME: Partial<Record<TipoAtividade, string>> = {
+  ENTREGA: 'Entrega',
+  VISITA: 'Visita',
+  REUNIAO: 'Reunião',
+  FOLLOW_UP: 'Follow-up',
+  TAREFA: 'Tarefa',
 };
 
 export const ROTULO_STATUS_CONVERSA: Record<StatusConversa, string> = {

@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const PORT = 5173;
+const PORT = 5174;
 const BASE_URL = process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`;
 
 export default defineConfig({
@@ -24,8 +24,10 @@ export default defineConfig({
   webServer: process.env.E2E_NO_SERVER
     ? undefined
     : {
-        command: 'npm run dev',
-        url: BASE_URL,
+        // vite.config.ts sobe em 5174. O teste anterior esperava 5173 e estourava o tempo
+        // sem o servidor responder. A porta aqui acompanha o Vite e o FRONTEND_URL local.
+        command: 'npm run dev -- --host --port 5174 --strictPort',
+        url: 'http://localhost:5174',
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
       },

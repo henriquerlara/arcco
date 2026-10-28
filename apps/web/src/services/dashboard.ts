@@ -5,6 +5,7 @@ export interface PeriodoDashboard {
   de?: string;
   ate?: string;
   dias?: number;
+  chave?: string;
   responsavelId?: string;
 }
 

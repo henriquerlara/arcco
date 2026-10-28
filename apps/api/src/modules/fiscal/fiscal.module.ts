@@ -5,11 +5,12 @@ import { OrcamentosModule } from '../orcamentos/orcamentos.module';
 import { FocusNfeClient } from './focus-nfe.client';
 import { NotasFiscaisService } from './notas-fiscais.service';
 import { NotasFiscaisController } from './notas-fiscais.controller';
+import { NfePedidoService } from './nfe-pedido.service';
 
 @Module({
   imports: [ArquivosModule, EmpresasModule, OrcamentosModule],
   controllers: [NotasFiscaisController],
-  providers: [FocusNfeClient, NotasFiscaisService],
-  exports: [NotasFiscaisService, FocusNfeClient],
+  providers: [FocusNfeClient, NotasFiscaisService, NfePedidoService],
+  exports: [NotasFiscaisService, FocusNfeClient, NfePedidoService],
 })
 export class FiscalModule {}

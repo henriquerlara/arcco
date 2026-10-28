@@ -1,32 +1,63 @@
-import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
-import PDFDocument from 'pdfkit';
+import { Inject, Injectable, Logger, Optional, forwardRef } from '@nestjs/common';
 import {
+  ChaveEtapaSistema,
+  lerDescontoMaximoPercentual,
+  lerMargemPadraoGlobal,
+  lerValidadeOrcamentoDias,
+  OrigemHistoricoEtapa,
+  PermissaoComercial,
   StatusOrcamento,
+  TipoAuditoria,
+  TipoDescontoOrcamento,
+  TipoEtapaFunil,
+  possuiPermissao,
+  validarDescontoEfetivoOrcamento,
   type atualizarOrcamentoSchema,
   type criarOrcamentoSchema,
-  type itemOrcamentoInputSchema,
 } from '@arcco/contratos';
+import { garantirEtapasEcolume } from '../oportunidades/kanban-ecolume';
+import { renderizarPdfEcolume, renderizarPdfLegado, type DadosPdfOrcamento } from './pdf-orcamento';
 import type { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { PlatformPrismaService } from '../../database/platform-prisma.service';
 import { PrismaService } from '../../database/prisma.service';
 import { Erros } from '../../common/erros/erros';
+import type { UsuarioAutenticado } from '../../common/auth/tipos';
 import { ArquivosService } from '../arquivos/arquivos.service';
+import { AuditoriaService } from '../auditoria/auditoria.service';
+import { PermissoesService } from '../permissoes/permissoes.service';
 import { ProdutosService } from '../produtos/produtos.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
+import {
+  montarItemEcolume,
+  montarItemLegado,
+  serializarItemOrcamento,
+  totaisOrcamento,
+  type ItemInput,
+} from './formula-item';
 
-type ItemInput = z.infer<typeof itemOrcamentoInputSchema>;
 type CriarOrcamentoInput = z.infer<typeof criarOrcamentoSchema>;
 type AtualizarOrcamentoInput = z.infer<typeof atualizarOrcamentoSchema>;
 
 const INCLUDE = {
   itens: { include: { produto: true }, orderBy: { ordem: 'asc' as const } },
+  orcamentoOrigem: { select: { id: true, numero: true } },
 } as const;
 
 const INCLUDE_EMISSAO = {
   itens: { include: { produto: true }, orderBy: { ordem: 'asc' as const } },
   oportunidade: { include: { contato: true, etapa: true } },
 } as const;
+
+/** Status em que cabeçalho/itens não podem ser alterados (API inclusive). */
+const STATUS_TRAVADOS = new Set<string>([
+  StatusOrcamento.ENVIADO,
+  StatusOrcamento.ACEITO,
+  StatusOrcamento.CANCELADO,
+  StatusOrcamento.CONVERTIDO,
+  StatusOrcamento.SUBSTITUIDO,
+  StatusOrcamento.RECUSADO,
+]);
 
 @Injectable()
 export class OrcamentosService {
@@ -37,16 +68,19 @@ export class OrcamentosService {
     private readonly platform: PlatformPrismaService,
     private readonly arquivos: ArquivosService,
     private readonly produtos: ProdutosService,
+    private readonly permissoes: PermissoesService,
     @Inject(forwardRef(() => WhatsAppService))
     private readonly whatsapp: WhatsAppService,
+    @Optional() private readonly auditoria?: AuditoriaService,
   ) {}
 
-  listarPorOportunidade(empresaId: string, oportunidadeId: string) {
-    return this.prisma.orcamento.findMany({
+  async listarPorOportunidade(empresaId: string, oportunidadeId: string) {
+    const lista = await this.prisma.orcamento.findMany({
       where: { empresaId, oportunidadeId },
       include: INCLUDE,
-      orderBy: { versao: 'desc' },
+      orderBy: [{ criadoEm: 'desc' }, { versao: 'desc' }],
     });
+    return lista.map((o) => this.serializarOrcamento(o));
   }
 
   /** Leitura usada pela emissão de NF: orçamento, itens, oportunidade, contato e etapa. */
@@ -70,10 +104,26 @@ export class OrcamentosService {
       include: INCLUDE,
     });
     if (!orcamento) throw Erros.naoEncontrado('ORCAMENTO_NAO_ENCONTRADO', 'Orcamento nao encontrado');
-    return { ...orcamento, avisosEstoque: await this.avisosEstoque(empresaId, orcamento.itens) };
+    return this.serializarOrcamento({
+      ...orcamento,
+      avisosEstoque: await this.avisosEstoque(empresaId, orcamento.itens),
+    });
   }
 
-  async criar(empresaId: string, usuarioId: string | null, dto: CriarOrcamentoInput) {
+  private serializarOrcamento<T extends { itens?: Array<Record<string, unknown>> }>(orc: T): T {
+    return {
+      ...orc,
+      itens: orc.itens?.map((i) => serializarItemOrcamento(i)),
+    } as T;
+  }
+
+  async criar(
+    empresaId: string,
+    usuario: UsuarioAutenticado | { id: string; empresaId?: string; perfil?: string } | string | null,
+    dto: CriarOrcamentoInput,
+    opcoes: { orcamentoOrigemId?: string | null } = {},
+  ) {
+    const usuarioId = typeof usuario === 'string' || usuario == null ? usuario : usuario.id;
     const oportunidade = await this.prisma.oportunidade.findFirst({
       where: { id: dto.oportunidadeId, empresaId },
     });
@@ -81,26 +131,58 @@ export class OrcamentosService {
       throw Erros.naoEncontrado('OPORTUNIDADE_NAO_ENCONTRADA', 'Oportunidade nao encontrada');
     }
 
-    const ultima = await this.prisma.orcamento.findFirst({
-      where: { empresaId, oportunidadeId: dto.oportunidadeId },
-      orderBy: { versao: 'desc' },
-      select: { versao: true },
-    });
-    const versao = (ultima?.versao ?? 0) + 1;
-    const contagem = await this.prisma.orcamento.count({ where: { empresaId } });
-    const numero = `ORC-${String(contagem + 1).padStart(4, '0')}-v${versao}`;
-    const itens = await this.montarItens(empresaId, dto.itens);
-    const subtotal = itens.reduce((acc, i) => acc + i.totalLinha, 0);
-    const descontoValor = dto.descontoValor ?? 0;
-    const total = Math.max(0, subtotal - descontoValor);
+    const ecolume = await this.permissoes.empresaEcolume(empresaId);
+    const podeVerCustos = await this.podeVerCustos(empresaId, usuario);
+    const podeAlterarPreco = await this.podeAlterarPreco(empresaId, usuario, podeVerCustos);
+    const paramsMontagem = ecolume
+      ? await this.paramsMontagem(empresaId)
+      : {
+          descontoMaximoPercentual: null as number | null,
+          margemPadraoGlobal: null as number | null,
+          validadeOrcamentoDias: null as number | null,
+        };
+    if (ecolume && !podeVerCustos) {
+      this.assertDescontoGeralSemCustos(
+        dto,
+        paramsMontagem.descontoMaximoPercentual ?? null,
+        podeAlterarPreco,
+      );
+    }
 
     const criado = await this.prisma.$transaction(async (tx) => {
-      // Último orçamento montado passa a ser o vigente (mesmo sem envio WhatsApp).
+      const montados = await this.montarItens(
+        empresaId,
+        dto.itens ?? [],
+        { ecolume, podeVerCustos, podeAlterarPreco, ...paramsMontagem },
+        tx,
+      );
+      const itens = montados.itens;
+      const totais = totaisOrcamento({
+        itens,
+        descontoTipo: dto.descontoTipo,
+        descontoValor: dto.descontoValor,
+        descontoPercentual: dto.descontoPercentual,
+      });
+      if (ecolume && !podeVerCustos) {
+        this.assertDescontoEfetivo(montados.totalSugerido, totais.total, paramsMontagem.descontoMaximoPercentual ?? null);
+      }
+      const { numero, versao } = await this.reservarNumero(
+        tx,
+        empresaId,
+        dto.oportunidadeId,
+        ecolume,
+      );
       if (itens.length > 0) {
         await tx.orcamento.updateMany({
           where: { oportunidadeId: dto.oportunidadeId, empresaId, vigente: true },
           data: { vigente: false },
         });
+      }
+      let validadeEm = dto.validadeEm ?? null;
+      if (validadeEm == null && ecolume && paramsMontagem.validadeOrcamentoDias) {
+        const d = new Date();
+        d.setDate(d.getDate() + paramsMontagem.validadeOrcamentoDias);
+        validadeEm = d;
       }
       const orc = await tx.orcamento.create({
         data: {
@@ -111,46 +193,134 @@ export class OrcamentosService {
           status: StatusOrcamento.RASCUNHO,
           vigente: itens.length > 0,
           observacoes: dto.observacoes ?? null,
-          descontoValor,
-          subtotal,
-          total,
-          validadeEm: dto.validadeEm ?? null,
+          descontoValor: totais.descontoValor,
+          descontoTipo: totais.descontoTipo,
+          descontoPercentual: totais.descontoPercentual,
+          subtotal: totais.subtotal,
+          total: totais.total,
+          validadeEm,
           criadoPorId: usuarioId,
+          orcamentoOrigemId: opcoes.orcamentoOrigemId ?? null,
           itens: { create: itens },
         },
         include: INCLUDE,
       });
-      await tx.oportunidade.update({
-        where: { id: dto.oportunidadeId },
-        data: {
-          valorEstimado: total,
-          codigoOrcamento: numero,
-        },
-      });
+      if (itens.length > 0) {
+        await tx.oportunidade.update({
+          where: { id: dto.oportunidadeId },
+          data: {
+            valorEstimado: totais.total,
+            codigoOrcamento: numero,
+          },
+        });
+        if (ecolume) {
+          await this.avancarParaOrcamentoEmAberto(tx, empresaId, dto.oportunidadeId, usuarioId);
+        }
+      }
       return orc;
     });
 
-    return {
+    return this.serializarOrcamento({
       ...criado,
       avisosEstoque: await this.avisosEstoque(empresaId, criado.itens),
-    };
+    });
   }
 
-  async atualizar(empresaId: string, id: string, dto: AtualizarOrcamentoInput) {
+  async duplicar(empresaId: string, usuario: UsuarioAutenticado | string | null, id: string) {
+    const origem = await this.obter(empresaId, id);
+    return this.criar(
+      empresaId,
+      usuario,
+      {
+        oportunidadeId: origem.oportunidadeId,
+        observacoes: origem.observacoes,
+        descontoValor: origem.descontoValor,
+        validadeEm: origem.validadeEm,
+        descontoTipo: (origem as { descontoTipo?: string }).descontoTipo as never,
+        descontoPercentual: (origem as { descontoPercentual?: number | null }).descontoPercentual,
+        itens: origem.itens.map((i) => ({
+          produtoId: i.produtoId,
+          nome: i.nome,
+          unidade: i.unidade,
+          quantidade: i.quantidade,
+          precoUnitario: i.precoUnitario,
+          desconto: i.desconto,
+          codigoInterno: (i as { codigoInterno?: string | null }).codigoInterno,
+          baseCusto: (i as { baseCusto?: string | null }).baseCusto as never,
+          custoBase: (i as { custoBase?: number | null }).custoBase != null
+            ? Number((i as { custoBase: unknown }).custoBase)
+            : null,
+          ipiPercentual: (i as { ipiPercentual?: number | null }).ipiPercentual != null
+            ? Number((i as { ipiPercentual: unknown }).ipiPercentual)
+            : null,
+          stPercentual: (i as { stPercentual?: number | null }).stPercentual != null
+            ? Number((i as { stPercentual: unknown }).stPercentual)
+            : null,
+          margem: (i as { margem?: number | null }).margem != null
+            ? Number((i as { margem: unknown }).margem)
+            : null,
+          precoManual: Boolean((i as { precoManual?: boolean }).precoManual),
+        })),
+      },
+      { orcamentoOrigemId: origem.id },
+    );
+  }
+
+  async atualizar(
+    empresaId: string,
+    id: string,
+    dto: AtualizarOrcamentoInput,
+    usuario?: UsuarioAutenticado | string | null,
+  ) {
     const atual = await this.obter(empresaId, id);
-    if (atual.status !== StatusOrcamento.RASCUNHO) {
-      throw Erros.invalido('ORCAMENTO_BLOQUEADO', 'So e possivel editar orcamentos em rascunho');
+    this.assertEditavel(atual.status);
+
+    const ecolume = await this.permissoes.empresaEcolume(empresaId);
+    const podeVerCustos = await this.podeVerCustos(empresaId, usuario ?? null);
+    const podeAlterarPreco = await this.podeAlterarPreco(empresaId, usuario ?? null, podeVerCustos);
+    const paramsMontagem = ecolume
+      ? await this.paramsMontagem(empresaId)
+      : {
+          descontoMaximoPercentual: null as number | null,
+          margemPadraoGlobal: null as number | null,
+          validadeOrcamentoDias: null as number | null,
+        };
+    if (ecolume && !podeVerCustos) {
+      this.assertDescontoGeralSemCustos(
+        dto,
+        paramsMontagem.descontoMaximoPercentual ?? null,
+        podeAlterarPreco,
+      );
     }
 
-    const itens = dto.itens ? await this.montarItens(empresaId, dto.itens) : null;
-    const subtotal = itens
-      ? itens.reduce((acc, i) => acc + i.totalLinha, 0)
-      : atual.subtotal;
-    const descontoValor = dto.descontoValor ?? atual.descontoValor;
-    const total = Math.max(0, subtotal - descontoValor);
-
-    const qtdItens = itens?.length ?? atual.itens.length;
     await this.prisma.$transaction(async (tx) => {
+      const montados = dto.itens
+        ? await this.montarItens(
+            empresaId,
+            dto.itens,
+            { ecolume, podeVerCustos, podeAlterarPreco, ...paramsMontagem },
+            tx,
+          )
+        : null;
+      const itens = montados?.itens ?? null;
+      const totais = totaisOrcamento({
+        itens: itens ?? atual.itens,
+        descontoTipo: dto.descontoTipo ?? (atual as { descontoTipo?: string }).descontoTipo,
+        descontoValor: dto.descontoValor ?? atual.descontoValor,
+        descontoPercentual:
+          dto.descontoPercentual !== undefined
+            ? dto.descontoPercentual
+            : (atual as { descontoPercentual?: number | null }).descontoPercentual,
+      });
+      if (ecolume && !podeVerCustos && montados) {
+        this.assertDescontoEfetivo(
+          montados.totalSugerido,
+          totais.total,
+          paramsMontagem.descontoMaximoPercentual ?? null,
+        );
+      }
+
+      const qtdItens = itens?.length ?? atual.itens.length;
       if (itens) {
         await tx.itemOrcamento.deleteMany({ where: { orcamentoId: id } });
         await tx.itemOrcamento.createMany({
@@ -172,9 +342,11 @@ export class OrcamentosService {
         where: { id },
         data: {
           observacoes: dto.observacoes === undefined ? undefined : dto.observacoes,
-          descontoValor,
-          subtotal,
-          total,
+          descontoValor: totais.descontoValor,
+          descontoTipo: totais.descontoTipo,
+          descontoPercentual: totais.descontoPercentual,
+          subtotal: totais.subtotal,
+          total: totais.total,
           validadeEm: dto.validadeEm === undefined ? undefined : dto.validadeEm,
           arquivoId: null,
           ...(qtdItens > 0 ? { vigente: true } : {}),
@@ -183,7 +355,7 @@ export class OrcamentosService {
       await tx.oportunidade.update({
         where: { id: atual.oportunidadeId },
         data: {
-          valorEstimado: total,
+          valorEstimado: totais.total,
           codigoOrcamento: atual.numero,
         },
       });
@@ -194,6 +366,17 @@ export class OrcamentosService {
 
   async gerarPdf(empresaId: string, id: string, usuarioId: string | null) {
     const orcamento = await this.obter(empresaId, id);
+    const ecolume = await this.permissoes.empresaEcolume(empresaId);
+
+    // ECOL-14: orçamento enviado/travado não regenera o PDF comercial (imuta o documento).
+    if (
+      ecolume &&
+      orcamento.status !== StatusOrcamento.RASCUNHO &&
+      orcamento.arquivoId
+    ) {
+      return orcamento;
+    }
+
     const oportunidade = await this.prisma.oportunidade.findFirst({
       where: { id: orcamento.oportunidadeId, empresaId },
       include: { contato: true, obra: true },
@@ -249,7 +432,8 @@ export class OrcamentosService {
           .join(' · ') || null
       : null;
 
-    const pdf = await this.renderizarPdf({
+    // Valores persistidos da linha (ECOL-13); nunca recalcula com custo/produto atual.
+    const dados: DadosPdfOrcamento = {
       empresa: {
         nome: empresa.nomeFantasia || empresa.nome,
         telefone: empresa.telefone,
@@ -269,7 +453,7 @@ export class OrcamentosService {
         observacoes: orcamento.observacoes,
         itens: orcamento.itens.map((i) => ({
           nome: i.nome,
-          sku: i.produto?.sku ?? null,
+          sku: ecolume ? null : (i.produto?.sku ?? null),
           unidade: i.unidade,
           quantidade: i.quantidade,
           precoUnitario: i.precoUnitario,
@@ -282,7 +466,11 @@ export class OrcamentosService {
       obra: obra?.nome ?? null,
       enderecoObra,
       numeroPedido: oportunidade?.codigo ?? '—',
-    });
+    };
+
+    const pdf = ecolume
+      ? await renderizarPdfEcolume(dados)
+      : await renderizarPdfLegado(dados);
 
     const arquivo = await this.arquivos.enviar(empresaId, usuarioId, {
       nome: `${orcamento.numero}.pdf`,
@@ -300,6 +488,24 @@ export class OrcamentosService {
     return this.obter(empresaId, id);
   }
 
+  /** Conteúdo do PDF comercial (gera se rascunho; reutiliza arquivo se já enviado). */
+  async conteudoPdf(empresaId: string, id: string, usuarioId: string | null) {
+    let orcamento = await this.obter(empresaId, id);
+    if (!orcamento.arquivoId) {
+      orcamento = await this.gerarPdf(empresaId, id, usuarioId);
+    } else {
+      const ecolume = await this.permissoes.empresaEcolume(empresaId);
+      if (!ecolume || orcamento.status === StatusOrcamento.RASCUNHO) {
+        orcamento = await this.gerarPdf(empresaId, id, usuarioId);
+      }
+    }
+    if (!orcamento.arquivoId) {
+      throw Erros.invalido('PDF_INDISPONIVEL', 'Nao foi possivel obter o PDF do orcamento');
+    }
+    const { arquivo, buffer } = await this.arquivos.conteudo(empresaId, orcamento.arquivoId);
+    return { orcamento, arquivo, buffer };
+  }
+
   /**
    * Marca o orçamento como enviado/vigente (aceito = último enviado) e espelha o total na oportunidade.
    * Retorna dados prontos para o WhatsAppService anexar o PDF.
@@ -309,22 +515,44 @@ export class OrcamentosService {
     if (orcamento.itens.length === 0) {
       throw Erros.invalido('ORCAMENTO_SEM_ITENS', 'Inclua itens antes de enviar');
     }
+    if (
+      orcamento.status !== StatusOrcamento.RASCUNHO &&
+      orcamento.status !== StatusOrcamento.ENVIADO
+    ) {
+      throw Erros.invalido(
+        'ORCAMENTO_NAO_ENVIAVEL',
+        'So e possivel enviar orcamentos em rascunho ou ja enviados',
+      );
+    }
     if (!orcamento.arquivoId) {
       orcamento = await this.gerarPdf(empresaId, id, usuarioId);
     }
 
+    const ecolume = await this.permissoes.empresaEcolume(empresaId);
+    const agora = new Date();
     await this.prisma.$transaction(async (tx) => {
       await tx.orcamento.updateMany({
         where: { oportunidadeId: orcamento.oportunidadeId, empresaId, vigente: true },
         data: { vigente: false },
       });
+      if (ecolume) {
+        await tx.orcamento.updateMany({
+          where: {
+            oportunidadeId: orcamento.oportunidadeId,
+            empresaId,
+            status: StatusOrcamento.ENVIADO,
+            id: { not: id },
+          },
+          data: { status: StatusOrcamento.SUBSTITUIDO, vigente: false },
+        });
+      }
       await tx.orcamento.update({
         where: { id },
         data: {
           status: StatusOrcamento.ENVIADO,
           vigente: true,
-          aceitoEm: new Date(),
-          enviadoEm: new Date(),
+          aceitoEm: agora,
+          enviadoEm: orcamento.enviadoEm ?? agora,
         },
       });
       await tx.oportunidade.update({
@@ -465,48 +693,436 @@ export class OrcamentosService {
     });
   }
 
-  private async montarItens(empresaId: string, itens: ItemInput[]) {
-    const saida: Array<{
-      produtoId: string | null;
-      nome: string;
-      unidade: string;
-      quantidade: number;
-      precoUnitario: number;
-      desconto: number;
-      totalLinha: number;
-      ordem: number;
-    }> = [];
 
-    for (let i = 0; i < itens.length; i++) {
-      const item = itens[i]!;
-      let nome = item.nome;
-      let unidade = item.unidade ?? 'un';
-      let precoUnitario = item.precoUnitario;
-      let produtoId: string | null = item.produtoId ?? null;
+  /** ECOL-12 — marca enviado sem WhatsApp; trava edição e grava enviadoEm. */
+  async marcarEnviado(empresaId: string, id: string) {
+    const orcamento = await this.obter(empresaId, id);
+    if (orcamento.status !== StatusOrcamento.RASCUNHO) {
+      throw Erros.invalido(
+        'ORCAMENTO_NAO_ENVIAVEL',
+        'So e possivel marcar como enviado um orcamento em rascunho',
+      );
+    }
+    if (orcamento.itens.length === 0) {
+      throw Erros.invalido('ORCAMENTO_SEM_ITENS', 'Inclua itens antes de marcar como enviado');
+    }
 
-      if (produtoId) {
-        const produto = await this.produtos.obter(empresaId, produtoId);
-        nome = produto.nome;
-        unidade = produto.unidade;
-        if (item.precoUnitario === undefined || item.precoUnitario === null) {
-          precoUnitario = produto.precoVenda;
-        }
+    const ecolume = await this.permissoes.empresaEcolume(empresaId);
+    const agora = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.orcamento.updateMany({
+        where: { oportunidadeId: orcamento.oportunidadeId, empresaId, vigente: true },
+        data: { vigente: false },
+      });
+      if (ecolume) {
+        await tx.orcamento.updateMany({
+          where: {
+            oportunidadeId: orcamento.oportunidadeId,
+            empresaId,
+            status: StatusOrcamento.ENVIADO,
+            id: { not: id },
+          },
+          data: { status: StatusOrcamento.SUBSTITUIDO, vigente: false },
+        });
+      }
+      await tx.orcamento.update({
+        where: { id },
+        data: {
+          status: StatusOrcamento.ENVIADO,
+          vigente: true,
+          enviadoEm: agora,
+        },
+      });
+      await tx.oportunidade.update({
+        where: { id: orcamento.oportunidadeId },
+        data: {
+          valorEstimado: orcamento.total,
+          codigoOrcamento: orcamento.numero,
+        },
+      });
+    });
+
+    return this.obter(empresaId, id);
+  }
+
+  async marcarRecusado(empresaId: string, id: string) {
+    const orcamento = await this.obter(empresaId, id);
+    if (orcamento.status !== StatusOrcamento.ENVIADO) {
+      throw Erros.invalido(
+        'TRANSICAO_INVALIDA',
+        'So e possivel recusar orcamentos enviados',
+      );
+    }
+    await this.prisma.orcamento.update({
+      where: { id },
+      data: { status: StatusOrcamento.RECUSADO, vigente: false },
+    });
+    return this.obter(empresaId, id);
+  }
+
+  /**
+   * §16.2 — exclusão física de orçamento em RASCUNHO (ECOLUME). Sem efeito em estoque,
+   * pagamento ou comissão; a trilha fica em LogAuditoria na mesma transação.
+   */
+  async excluir(empresaId: string, id: string, ator: { id: string; perfil: string }) {
+    if (!(await this.permissoes.empresaEcolume(empresaId))) {
+      throw Erros.naoEncontrado(
+        'ORCAMENTO_EXCLUSAO_INDISPONIVEL',
+        'Exclusao de orcamento nao esta disponivel para esta empresa',
+      );
+    }
+    await this.permissoes.afirmar(
+      { id: ator.id, empresaId, perfil: ator.perfil },
+      PermissaoComercial.EXCLUIR_ORCAMENTO_RASCUNHO,
+    );
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        SELECT pg_advisory_xact_lock(hashtext(${`orcamento-exclusao:${empresaId}:${id}`}))
+      `;
+      const orcamento = await tx.orcamento.findFirst({
+        where: { id, empresaId },
+        select: {
+          id: true,
+          numero: true,
+          status: true,
+          total: true,
+          oportunidadeId: true,
+        },
+      });
+      if (!orcamento) {
+        throw Erros.naoEncontrado('ORCAMENTO_NAO_ENCONTRADO', 'Orcamento nao encontrado');
+      }
+      if (orcamento.status !== StatusOrcamento.RASCUNHO) {
+        throw Erros.conflito(
+          'ORCAMENTO_NAO_EXCLUIVEL',
+          'So e possivel excluir orcamentos em rascunho',
+        );
+      }
+      const pedido = await tx.pedido.findFirst({
+        where: { orcamentoId: id, empresaId },
+        select: { id: true },
+      });
+      if (pedido) {
+        throw Erros.conflito(
+          'ORCAMENTO_COM_PEDIDO',
+          'Este orcamento possui pedido vinculado e nao pode ser excluido',
+        );
       }
 
-      const desconto = item.desconto ?? 0;
-      const totalLinha = Math.max(0, item.quantidade * precoUnitario - desconto);
-      saida.push({
-        produtoId,
-        nome,
-        unidade,
-        quantidade: item.quantidade,
-        precoUnitario,
-        desconto,
-        totalLinha,
-        ordem: i,
+      const apagados = await tx.orcamento.deleteMany({
+        where: { id, empresaId, status: StatusOrcamento.RASCUNHO },
       });
+      if (apagados.count === 0) {
+        throw Erros.naoEncontrado('ORCAMENTO_NAO_ENCONTRADO', 'Orcamento nao encontrado');
+      }
+
+      await this.auditoria?.registrar(tx, {
+        empresaId,
+        usuarioId: ator.id,
+        tipo: TipoAuditoria.EXCLUSAO_ORCAMENTO,
+        entidade: 'ORCAMENTO',
+        entidadeId: orcamento.id,
+        anterior: {
+          numero: orcamento.numero,
+          status: orcamento.status,
+          total: orcamento.total,
+          oportunidadeId: orcamento.oportunidadeId,
+        },
+        posterior: null,
+      });
+    });
+
+    return { ok: true };
+  }
+
+  private assertEditavel(status: string) {
+    if (STATUS_TRAVADOS.has(status) || status !== StatusOrcamento.RASCUNHO) {
+      throw Erros.invalido(
+        'ORCAMENTO_BLOQUEADO',
+        'So e possivel editar orcamentos em rascunho',
+      );
     }
-    return saida;
+  }
+
+  private async reservarNumero(
+    tx: Prisma.TransactionClient,
+    empresaId: string,
+    oportunidadeId: string,
+    ecolume: boolean,
+  ): Promise<{ numero: string; versao: number }> {
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(hashtext(${`${empresaId}:orcamento-numero`}))
+    `;
+
+    if (!ecolume) {
+      const ultima = await tx.orcamento.findFirst({
+        where: { empresaId, oportunidadeId },
+        orderBy: { versao: 'desc' },
+        select: { versao: true },
+      });
+      const versao = (ultima?.versao ?? 0) + 1;
+      const contagem = await tx.orcamento.count({ where: { empresaId } });
+      return {
+        numero: `ORC-${String(contagem + 1).padStart(4, '0')}-v${versao}`,
+        versao,
+      };
+    }
+
+    const lista = await tx.orcamento.findMany({
+      where: { empresaId, numero: { startsWith: 'ORC-' } },
+      select: { numero: true },
+    });
+    let max = 0;
+    for (const o of lista) {
+      const m = /^ORC-(\d+)$/.exec(o.numero);
+      if (m) max = Math.max(max, Number(m[1]));
+    }
+    return {
+      numero: `ORC-${String(max + 1).padStart(4, '0')}`,
+      versao: 1,
+    };
+  }
+
+  private async paramsMontagem(empresaId: string): Promise<{
+    descontoMaximoPercentual: number | null;
+    margemPadraoGlobal: number | null;
+    validadeOrcamentoDias: number | null;
+  }> {
+    const emp = this.platform?.empresa
+      ? await this.platform.empresa.findUnique({
+          where: { id: empresaId },
+          select: { configuracoes: true },
+        })
+      : null;
+    return {
+      descontoMaximoPercentual: lerDescontoMaximoPercentual(emp?.configuracoes),
+      margemPadraoGlobal: lerMargemPadraoGlobal(emp?.configuracoes),
+      validadeOrcamentoDias: lerValidadeOrcamentoDias(emp?.configuracoes),
+    };
+  }
+
+  private async montarItens(
+    empresaId: string,
+    itens: ItemInput[],
+    opcoes: {
+      ecolume: boolean;
+      podeVerCustos: boolean;
+      podeAlterarPreco?: boolean;
+      descontoMaximoPercentual?: number | null;
+      margemPadraoGlobal?: number | null;
+      validadeOrcamentoDias?: number | null;
+    },
+    tx?: Prisma.TransactionClient,
+  ) {
+    const db = tx ?? this.prisma;
+    const saida = [];
+    let totalSugerido = 0;
+    for (let i = 0; i < itens.length; i++) {
+      const bruto = itens[i]!;
+      const salvarNoCadastro = Boolean(bruto.salvarNoCadastro);
+      const fornecedorId = bruto.fornecedorId ?? null;
+      const item: ItemInput = {
+        produtoId: bruto.produtoId,
+        nome: bruto.nome,
+        unidade: bruto.unidade,
+        quantidade: bruto.quantidade,
+        precoUnitario: bruto.precoUnitario,
+        desconto: bruto.desconto,
+        codigoInterno: bruto.codigoInterno,
+        baseCusto: bruto.baseCusto,
+        custoBase: bruto.custoBase,
+        ipiPercentual: bruto.ipiPercentual,
+        stPercentual: bruto.stPercentual,
+        margem: bruto.margem,
+        precoManual: bruto.precoManual,
+      };
+
+      if (salvarNoCadastro) {
+        if (!opcoes.ecolume) {
+          throw Erros.invalido('CADASTRO_RAPIDO_INDISPONIVEL', 'Cadastro rapido so na personalizacao ECOLUME');
+        }
+        if (!tx) {
+          throw Erros.invalido('CADASTRO_RAPIDO_TX', 'Cadastro rapido exige transacao do orcamento');
+        }
+        if (!opcoes.podeVerCustos) {
+          throw Erros.invalido(
+            'PRECO_ALTERACAO_INDISPONIVEL',
+            'Sem VER_CUSTOS e sem limite ECOL-02, o cadastro rapido nao pode informar custo/preco',
+          );
+        }
+        if (item.produtoId) {
+          throw Erros.invalido('CADASTRO_RAPIDO_INVALIDO', 'Item com produto nao usa cadastro rapido');
+        }
+        if (!fornecedorId) {
+          throw Erros.invalido('FORNECEDOR_OBRIGATORIO', 'Informe o fornecedor do item novo');
+        }
+        if (item.custoBase == null) {
+          throw Erros.invalido('CUSTO_REFERENCIA_OBRIGATORIO', 'Informe o custo de referencia do item novo');
+        }
+        if (item.margem == null || item.margem <= 0) {
+          throw Erros.invalido('MARGEM_OBRIGATORIA', 'Informe a margem do item novo');
+        }
+
+        const preview = montarItemEcolume(
+          {
+            ...item,
+            baseCusto: 'INFORMADO',
+            stPercentual: item.stPercentual ?? 0,
+          },
+          null,
+          i,
+          true,
+          {
+            descontoMaximoPercentual: opcoes.descontoMaximoPercentual,
+            margemPadraoGlobal: opcoes.margemPadraoGlobal,
+          },
+        );
+        if (preview.erro) throw Erros.invalido(preview.erro.codigo, preview.erro.mensagem);
+
+        const criado = await this.produtos.criarCadastroRapidoTx(tx, empresaId, {
+          nome: item.nome,
+          descricaoComercial: item.nome,
+          unidade: item.unidade,
+          fornecedorId,
+          custoReferencia: item.custoBase,
+          ipi: item.ipiPercentual ?? 0,
+          margem: item.margem,
+          precoVenda: preview.item.precoUnitario,
+        });
+        item.produtoId = criado.id;
+        item.codigoInterno = criado.codigoInterno;
+        item.baseCusto = 'INFORMADO';
+        if (item.stPercentual == null && criado.fornecedor?.aliquotaSt != null) {
+          item.stPercentual = Number(criado.fornecedor.aliquotaSt);
+        }
+      } else if (!opcoes.ecolume && (bruto.salvarNoCadastro || bruto.fornecedorId)) {
+        // Campos ECOL-15 ignorados no legado.
+      }
+
+      let produto: Awaited<ReturnType<OrcamentosService['carregarProdutoLinha']>> = null;
+      if (item.produtoId) {
+        produto = await this.carregarProdutoLinha(empresaId, item.produtoId, db);
+        if (!produto) {
+          throw Erros.naoEncontrado('PRODUTO_NAO_ENCONTRADO', 'Produto nao encontrado');
+        }
+      }
+      if (opcoes.ecolume) {
+        const r = montarItemEcolume(item, produto, i, opcoes.podeVerCustos, {
+          descontoMaximoPercentual: opcoes.descontoMaximoPercentual,
+          podeAlterarPreco: opcoes.podeAlterarPreco,
+          margemPadraoGlobal: opcoes.margemPadraoGlobal,
+        });
+        if (r.erro) throw Erros.invalido(r.erro.codigo, r.erro.mensagem);
+        if (r.precoSugerido != null) {
+          totalSugerido += r.precoSugerido * r.item.quantidade;
+        } else {
+          totalSugerido += r.item.precoUnitario * r.item.quantidade;
+        }
+        saida.push(r.item);
+      } else {
+        saida.push(montarItemLegado(item, produto, i));
+      }
+    }
+    return { itens: saida, totalSugerido };
+  }
+
+  private async carregarProdutoLinha(
+    empresaId: string,
+    produtoId: string,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
+    return db.produto.findFirst({
+      where: { id: produtoId, empresaId },
+      select: {
+        id: true,
+        nome: true,
+        unidade: true,
+        precoVenda: true,
+        codigoInterno: true,
+        descricaoComercial: true,
+        ipi: true,
+        margem: true,
+        custoMedio: true,
+        ultimoPreco: true,
+        fornecedor: { select: { aliquotaSt: true } },
+      },
+    });
+  }
+
+  private async podeVerCustos(
+    empresaId: string,
+    usuario: UsuarioAutenticado | { id: string; perfil?: string } | string | null,
+  ): Promise<boolean> {
+    if (!(await this.permissoes.empresaEcolume(empresaId))) return true;
+    if (usuario == null || typeof usuario === 'string') {
+      // Chamadas internas/duplicar sem perfil: trata como com custo (proprietário de testes).
+      return true;
+    }
+    const ctx = await this.permissoes.resolver({
+      id: usuario.id,
+      empresaId,
+      perfil: usuario.perfil ?? 'VENDEDOR',
+    });
+    return possuiPermissao(ctx, PermissaoComercial.VER_CUSTOS);
+  }
+
+  private async podeAlterarPreco(
+    empresaId: string,
+    usuario: UsuarioAutenticado | { id: string; perfil?: string } | string | null,
+    jaPodeVerCustos: boolean,
+  ): Promise<boolean> {
+    if (jaPodeVerCustos) return true;
+    if (!(await this.permissoes.empresaEcolume(empresaId))) return true;
+    if (usuario == null || typeof usuario === 'string') return true;
+    const ctx = await this.permissoes.resolver({
+      id: usuario.id,
+      empresaId,
+      perfil: usuario.perfil ?? 'VENDEDOR',
+    });
+    return possuiPermissao(ctx, PermissaoComercial.ALTERAR_PRECO);
+  }
+
+  /** Sem ALTERAR_PRECO / limite ECOL-02, desconto geral positivo bloqueado. */
+  private assertDescontoGeralSemCustos(
+    dto: {
+      descontoValor?: number | null;
+      descontoTipo?: string | null;
+      descontoPercentual?: number | null;
+    },
+    descontoMaximoPercentual: number | null,
+    podeAlterarPreco: boolean,
+  ) {
+    const mudaDesconto =
+      (dto.descontoValor != null && dto.descontoValor > 0) ||
+      (dto.descontoPercentual != null && dto.descontoPercentual > 0) ||
+      dto.descontoTipo === TipoDescontoOrcamento.PERCENTUAL;
+    if (!mudaDesconto) return;
+    if (!podeAlterarPreco) {
+      throw Erros.invalido(
+        'DESCONTO_ALTERACAO_INDISPONIVEL',
+        'Sem VER_CUSTOS nem ALTERAR_PRECO, o desconto nao pode ser alterado',
+      );
+    }
+    if (descontoMaximoPercentual == null) {
+      throw Erros.invalido(
+        'DESCONTO_ALTERACAO_INDISPONIVEL',
+        'Sem permissao de custos e sem percentual maximo (ECOL-02), o desconto nao pode ser alterado',
+      );
+    }
+  }
+
+  private assertDescontoEfetivo(
+    totalSugerido: number,
+    totalFinal: number,
+    descontoMaximoPercentual: number | null,
+  ) {
+    const r = validarDescontoEfetivoOrcamento({
+      descontoMaximoPercentual,
+      totalSugerido,
+      totalFinal,
+    });
+    if (!r.ok) throw Erros.invalido(r.codigo, r.mensagem);
   }
 
   private async avisosEstoque(
@@ -538,198 +1154,40 @@ export class OrcamentosService {
     return avisos;
   }
 
-  private renderizarPdf(dados: {
-    empresa: {
-      nome: string;
-      telefone: string | null;
-      endereco: string | null;
-      cnpj: string | null;
-    };
-    vendedor: { nome: string; email: string } | null;
-    logo: Buffer | null;
-    orcamento: {
-      numero: string;
-      versao: number;
-      descontoValor: number;
-      subtotal: number;
-      total: number;
-      validadeEm: Date | null;
-      criadoEm: Date;
-      observacoes: string | null;
-      itens: Array<{
-        nome: string;
-        sku: string | null;
-        unidade: string;
-        quantidade: number;
-        precoUnitario: number;
-        desconto: number;
-        totalLinha: number;
-      }>;
-    };
-    cliente: string;
-    telefoneCliente: string | null;
-    obra: string | null;
-    enderecoObra: string | null;
-    numeroPedido: string;
-  }): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ size: 'A4', margin: 48 });
-      const chunks: Buffer[] = [];
-      doc.on('data', (c) => chunks.push(c as Buffer));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
-
-      const moeda = (v: number) =>
-        v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-      const telefone = (valor: string | null | undefined) => {
-        if (!valor) return null;
-        const d = valor.replace(/\D/g, '');
-        const nacional =
-          d.startsWith('55') && (d.length === 12 || d.length === 13) ? d.slice(2) : d;
-        const comPais = nacional !== d;
-        let formatado: string | null = null;
-        if (nacional.length === 11) {
-          formatado = `(${nacional.slice(0, 2)}) ${nacional.slice(2, 7)}-${nacional.slice(7)}`;
-        } else if (nacional.length === 10) {
-          formatado = `(${nacional.slice(0, 2)}) ${nacional.slice(2, 6)}-${nacional.slice(6)}`;
-        }
-        if (!formatado) return valor;
-        return comPais ? `+55 ${formatado}` : formatado;
-      };
-      const cnpj = (valor: string | null | undefined) => {
-        if (!valor) return null;
-        const d = valor.replace(/\D/g, '');
-        if (d.length !== 14) return valor;
-        return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
-      };
-
-      if (dados.logo) {
-        try {
-          doc.image(dados.logo, 48, 40, { fit: [110, 72] });
-        } catch {
-          /* logo inválida — segue sem imagem */
-        }
-      }
-
-      const hx = dados.logo ? 172 : 48;
-      const cabecalho = [
-        dados.empresa.endereco,
-        telefone(dados.empresa.telefone),
-        cnpj(dados.empresa.cnpj) ? `CNPJ ${cnpj(dados.empresa.cnpj)}` : null,
-        dados.vendedor
-          ? `Vendedor: ${dados.vendedor.nome}${dados.vendedor.email ? ` · ${dados.vendedor.email}` : ''}`
-          : null,
-      ].filter(Boolean) as string[];
-
-      doc.fillColor('#073b42').fontSize(14).text(dados.empresa.nome, hx, 40, { width: 370 });
-      let hy = doc.y + 2;
-      doc.fontSize(8).fillColor('#12383b');
-      for (const linha of cabecalho) {
-        doc.text(linha, hx, hy, { width: 370 });
-        hy = doc.y + 1;
-      }
-
-      const inicio = Math.max(hy + 16, 108);
-      doc.fillColor('#073b42').fontSize(14).text('Orçamento comercial', 48, inicio);
-      doc.fontSize(10).fillColor('#12383b');
-      doc.text(
-        `Nº orçamento: ${dados.orcamento.numero}  ·  versão ${dados.orcamento.versao}  ·  ${dados.orcamento.criadoEm.toLocaleDateString('pt-BR')}`,
-      );
-      doc.text(`Nº pedido: ${dados.numeroPedido}`);
-      const foneCliente = telefone(dados.telefoneCliente);
-      doc.text(`Cliente: ${dados.cliente}${foneCliente ? `  ·  ${foneCliente}` : ''}`);
-      if (dados.obra) doc.text(`Projeto: ${dados.obra}`);
-      if (dados.enderecoObra) doc.text(`Endereço: ${dados.enderecoObra}`, { width: 500 });
-      if (dados.orcamento.validadeEm) {
-        doc.text(`Validade: ${dados.orcamento.validadeEm.toLocaleDateString('pt-BR')}`);
-      }
-
-      doc.moveDown();
-      const y0 = doc.y;
-      doc.fontSize(9).fillColor('#687473');
-      doc.text('Qtd', 48, y0, { width: 36 });
-      doc.text('Und.', 86, y0, { width: 36 });
-      doc.text('Item', 126, y0, { width: 210 });
-      doc.text('Unit.', 340, y0, { width: 90 });
-      doc.text('Total', 430, y0, { width: 117, align: 'right' });
-      doc
-        .moveTo(48, y0 + 14)
-        .lineTo(547, y0 + 14)
-        .strokeColor('#d8d2c7')
-        .stroke();
-
-      let y = y0 + 22;
-      for (const item of dados.orcamento.itens) {
-        doc.fontSize(10).fillColor('#12383b');
-        const rotulo = item.sku ? `${item.nome}\n${item.sku}` : item.nome;
-        const altura = Math.max(16, doc.heightOfString(rotulo, { width: 200 }));
-        if (y + altura > 720) {
-          doc.addPage();
-          y = 48;
-        }
-        doc.text(String(item.quantidade), 48, y, { width: 36 });
-        doc.text(item.unidade, 86, y, { width: 36 });
-        doc.text(item.nome, 126, y, { width: 200 });
-        if (item.sku) {
-          doc.fontSize(8).fillColor('#687473').text(item.sku, 126, y + 12, { width: 200 });
-        }
-        doc.fontSize(10).fillColor('#12383b');
-        doc.text(moeda(item.precoUnitario), 340, y, { width: 90 });
-        doc.text(moeda(item.totalLinha), 430, y, { width: 117, align: 'right' });
-        y += item.sku ? altura + 8 : 22;
-      }
-
-      doc
-        .moveTo(48, y)
-        .lineTo(547, y)
-        .strokeColor('#d8d2c7')
-        .stroke();
-      y += 12;
-      doc.fontSize(10).fillColor('#687473').text(`Subtotal: ${moeda(dados.orcamento.subtotal)}`, 350, y, {
-        width: 190,
-        align: 'right',
-      });
-      y += 16;
-      if (dados.orcamento.descontoValor > 0) {
-        doc.text(`Desconto: ${moeda(dados.orcamento.descontoValor)}`, 350, y, {
-          width: 190,
-          align: 'right',
-        });
-        y += 16;
-      }
-      doc
-        .fillColor('#073b42')
-        .fontSize(12)
-        .text(`Total: ${moeda(dados.orcamento.total)}`, 350, y, { width: 190, align: 'right' });
-      y += 28;
-
-      const obs = dados.orcamento.observacoes?.trim();
-      if (obs) {
-        if (y > 700) {
-          doc.addPage();
-          y = 48;
-        }
-        doc.fontSize(9).fillColor('#687473').text('Observações', 48, y, { width: 500 });
-        y = doc.y + 2;
-        doc.fontSize(10).fillColor('#12383b').text(obs, 48, y, { width: 500 });
-        y = doc.y + 16;
-      }
-
-      if (y > 760) {
-        doc.addPage();
-        y = 48;
-      }
-      doc
-        .fontSize(8)
-        .fillColor('#687473')
-        .text(
-          'Documento gerado pela ARCCO. Este orçamento não substitui nota fiscal.',
-          48,
-          Math.max(y, 780),
-          { width: 500, align: 'center' },
-        );
-
-      doc.end();
+  /** ECOL-19 — primeiro ORC leva o negócio a Orçamento em aberto. */
+  private async avancarParaOrcamentoEmAberto(
+    tx: Prisma.TransactionClient,
+    empresaId: string,
+    oportunidadeId: string,
+    usuarioId?: string | null,
+  ) {
+    await garantirEtapasEcolume(tx, empresaId);
+    const destino = await tx.etapaFunil.findFirst({
+      where: { empresaId, chaveSistema: ChaveEtapaSistema.ORCAMENTO_EM_ABERTO, ativo: true },
+    });
+    if (!destino) return;
+    const opp = await tx.oportunidade.findFirst({
+      where: { id: oportunidadeId, empresaId },
+      include: { etapa: true },
+    });
+    if (!opp || opp.etapaId === destino.id) return;
+    if (opp.etapa.tipo === TipoEtapaFunil.PERDIDA) return;
+    await tx.oportunidade.update({
+      where: { id: oportunidadeId },
+      data: { etapaId: destino.id, fechadaEm: null, motivoPerda: null },
+    });
+    await tx.historicoEtapaOportunidade.create({
+      data: {
+        empresaId,
+        oportunidadeId,
+        etapaId: destino.id,
+        etapaNome: destino.nome,
+        etapaAnteriorId: opp.etapaId,
+        etapaAnteriorNome: opp.etapa.nome,
+        origem: OrigemHistoricoEtapa.MANUAL,
+        usuarioId: usuarioId ?? null,
+      },
     });
   }
+
 }

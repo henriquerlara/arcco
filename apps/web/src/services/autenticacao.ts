@@ -10,6 +10,7 @@ import { desembrulhar, http } from './http';
 interface SessaoBruta {
   usuario: Usuario & { deveTrocarSenha?: boolean };
   empresa?: Empresa | null;
+  permissoesComerciais?: string[] | null;
 }
 
 function mapearUsuario(usuario: SessaoBruta['usuario']): Usuario {
@@ -24,6 +25,7 @@ function mapearSessao(bruta: SessaoBruta): Sessao {
   return {
     usuario: mapearUsuario(bruta.usuario),
     empresa: (bruta.empresa ?? null) as Empresa,
+    permissoesComerciais: bruta.permissoesComerciais ?? null,
   };
 }
 

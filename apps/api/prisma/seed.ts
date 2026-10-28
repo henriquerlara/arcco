@@ -437,7 +437,11 @@ async function semear(spec: EspecificacaoEmpresa): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  // Um database operacional por enquanto. A segunda demo espera o banco dela.
+  // Um database operacional por enquanto. A segunda demo usa o mesmo banco, isolada por empresaId.
+  if (process.env.SEED_SO_CONCRETO === '1') {
+    await semear(EMPRESAS[1]);
+    return;
+  }
   await semear(EMPRESAS[0]);
   // eslint-disable-next-line no-console
   console.log(`\nSeed OK. Senha: ${SENHA_PADRAO}`);
