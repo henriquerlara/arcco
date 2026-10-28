@@ -415,9 +415,10 @@ const passosProcesso = computed<PassoProcesso[]>(() => {
         )
         .map((e) => [e.chaveSistema as string, e]),
     );
-    return COLUNAS_PRE_VENDA_ECOLUME.map((chave) => {
+    const passos: PassoProcesso[] = [];
+    for (const chave of COLUNAS_PRE_VENDA_ECOLUME) {
       const etapa = porChave.get(chave);
-      if (!etapa) return null;
+      if (!etapa) continue;
       let estado: EstadoPasso = 'futura';
       if (chave === ChaveEtapaSistema.NOVO_CONTATO) {
         estado =
@@ -431,12 +432,13 @@ const passosProcesso = computed<PassoProcesso[]>(() => {
       } else if (chave === ChaveEtapaSistema.PERDIDO) {
         estado = negocioPerdido.value ? 'atual' : 'futura';
       }
-      return {
+      passos.push({
         etapa,
         estado,
         chegada: chegadaPorEtapa.value.get(etapa.id),
-      };
-    }).filter((p): p is PassoProcesso => p != null);
+      });
+    }
+    return passos;
   }
 
   const abertas = etapas
