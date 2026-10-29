@@ -14,7 +14,6 @@ export interface ItemNavegacaoComercial {
 /** Rotas do produto compartilhado que a personalização Ecolume não oferece na interface. */
 export const ROTAS_OCULTAS_ECOLUME = [
   'conversas',
-  'produtos',
   'obras',
   'obra-detalhe',
   'config-whatsapp',
@@ -71,6 +70,7 @@ export function itensNavegacaoComercial(opcoes: {
     ];
     if (opcoes.podeCatalogo) {
       itens.push(
+        { id: 'produtos', rotulo: 'Produtos', rota: '/app/produtos' },
         { id: 'estoque', rotulo: 'Estoque', rota: '/app/estoque' },
         { id: 'fornecedores', rotulo: 'Fornecedores', rota: '/app/fornecedores' },
         { id: 'fiscal', rotulo: 'Fiscal', rota: '/app/fiscal' },

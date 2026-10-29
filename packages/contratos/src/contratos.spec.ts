@@ -221,6 +221,7 @@ describe('personalização comercial por empresa', () => {
       'Agenda',
       'Clientes',
       'Parceiros',
+      'Produtos',
       'Estoque',
       'Fornecedores',
       'Fiscal',
@@ -232,6 +233,7 @@ describe('personalização comercial por empresa', () => {
       '/app/agenda',
       '/app/clientes',
       '/app/parceiros',
+      '/app/produtos',
       '/app/estoque',
       '/app/fornecedores',
       '/app/fiscal',
@@ -249,10 +251,9 @@ describe('personalização comercial por empresa', () => {
     expect(lerPersonalizacaoComercial(ecolume)).toBe(PersonalizacaoComercial.ECOLUME);
   });
 
-  it('URL direta de conversas, produtos, projetos, WhatsApp e automação só fecha na Ecolume', () => {
+  it('URL direta de conversas, projetos, WhatsApp e automação só fecha na Ecolume', () => {
     for (const nome of [
       'conversas',
-      'produtos',
       'obras',
       'obra-detalhe',
       'config-whatsapp',
@@ -263,6 +264,7 @@ describe('personalização comercial por empresa', () => {
       expect(rotaOcultaNaPersonalizacao(nome, undefined)).toBe(false);
     }
     expect(rotaOcultaNaPersonalizacao('dashboard', PersonalizacaoComercial.ECOLUME)).toBe(false);
+    expect(rotaOcultaNaPersonalizacao('produtos', PersonalizacaoComercial.ECOLUME)).toBe(false);
     expect(rotaOcultaNaPersonalizacao('estoque', PersonalizacaoComercial.ECOLUME)).toBe(false);
   });
 
@@ -279,14 +281,15 @@ describe('personalização comercial por empresa', () => {
       podeConfigurar: false,
     }).map((item) => item.id);
 
+    expect(vendedor).toContain('produtos');
     expect(vendedor).toContain('estoque');
     expect(vendedor).toContain('fornecedores');
     expect(vendedor).toContain('fiscal');
     expect(vendedor).not.toContain('configuracoes');
+    expect(atendente).not.toContain('produtos');
     expect(atendente).not.toContain('estoque');
     expect(atendente).not.toContain('fornecedores');
     expect(atendente).not.toContain('fiscal');
-    expect(atendente).not.toContain('produtos');
   });
 
   it('sem concessão, a flag esconde custo e preserva o preço de venda', () => {

@@ -140,6 +140,7 @@ export const ABA_POR_ITEM_NAV: Record<string, PermissaoComercial> = {
   agenda: PermissaoComercial.ABA_AGENDA,
   clientes: PermissaoComercial.ABA_CLIENTES,
   parceiros: PermissaoComercial.ABA_PARCEIROS,
+  produtos: PermissaoComercial.ABA_ESTOQUE,
   estoque: PermissaoComercial.ABA_ESTOQUE,
   fornecedores: PermissaoComercial.ABA_ESTOQUE,
   fiscal: PermissaoComercial.ABA_FISCAL,
